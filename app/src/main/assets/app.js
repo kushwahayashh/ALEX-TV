@@ -611,7 +611,7 @@ function handleSettingsEnter() {
     btn.textContent = 'Downloading...';
     btn.disabled = true;
     if (nativeBridge && typeof nativeBridge.updateApp === 'function') {
-      nativeBridge.updateApp('https://github.com/lunatestus/ALEX-TV/releases/download/latest/ALEX-TV.apk');
+      nativeBridge.updateApp('https://github.com/kushwahayashh/ALEX-TV/releases/download/latest/ALEX-TV.apk');
     }
     return;
   }
