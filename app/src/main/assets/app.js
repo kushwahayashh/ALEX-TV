@@ -448,6 +448,39 @@ async function resolveTunnelUrl() {
   throw new Error('Tunnel URL missing');
 }
 
+function isLikelyTunnelError(err) {
+  if (!err) return false;
+  const status = err.status;
+  if (typeof status === 'number') {
+    if ([401, 403, 404, 408, 429, 500, 502, 503, 504].includes(status)) return true;
+  }
+  const msg = String(err.message || '').toLowerCase();
+  return (
+    msg.includes('failed to fetch') ||
+    msg.includes('network') ||
+    msg.includes('timeout') ||
+    msg.includes('http 5') ||
+    msg.includes('http 4') ||
+    msg.includes('cors')
+  );
+}
+
+async function withFreshTunnel(task, { statusText } = {}) {
+  if (!libraryState.tunnelUrl) {
+    if (statusText) setLibraryStatus(statusText);
+    libraryState.tunnelUrl = await resolveTunnelUrl();
+  }
+  try {
+    return await task(libraryState.tunnelUrl);
+  } catch (err) {
+    if (!isLikelyTunnelError(err)) throw err;
+    libraryState.tunnelUrl = null;
+    if (statusText) setLibraryStatus(statusText);
+    const fresh = await resolveTunnelUrl();
+    return await task(fresh);
+  }
+}
+
 function cancelLibraryRetry() {
   if (libraryState.retryTimer) {
     clearTimeout(libraryState.retryTimer);
@@ -472,11 +505,13 @@ async function loadLibrary(path) {
   libraryState.loading = true;
   setLibraryStatus('Loading library...');
   try {
-    if (!libraryState.tunnelUrl) {
-      libraryState.tunnelUrl = await resolveTunnelUrl();
-    }
-    const listUrl = `${libraryState.tunnelUrl}/list?path=${encodeURIComponent(path)}`;
-    const data = await fetchJson(listUrl);
+    const data = await withFreshTunnel(
+      (tunnelUrl) => {
+        const listUrl = `${tunnelUrl}/list?path=${encodeURIComponent(path)}`;
+        return fetchJson(listUrl);
+      },
+      { statusText: 'Reconnecting...' }
+    );
     libraryState.path = data.path || path;
     libraryState.items = Array.isArray(data.items) ? data.items : [];
     libraryState.visibleItems = [];
@@ -597,16 +632,17 @@ function scrollLibraryIntoView(el) {
 async function openLibraryFile(item) {
   if (!item || !item.path) return;
   try {
-    if (!libraryState.tunnelUrl) {
-      libraryState.tunnelUrl = await resolveTunnelUrl();
-    }
     setLibraryStatus('Opening file...');
-    const streamUrl = `${libraryState.tunnelUrl}/stream?path=${encodeURIComponent(item.path)}`;
-    if (nativeBridge && typeof nativeBridge.play === 'function') {
-      nativeBridge.play(streamUrl, item.name || '');
-    } else {
+    await withFreshTunnel(async (tunnelUrl) => {
+      // Quick health check to avoid launching with a stale tunnel URL.
+      await fetchJson(`${tunnelUrl}/health`);
+      const streamUrl = `${tunnelUrl}/stream?path=${encodeURIComponent(item.path)}`;
+      if (nativeBridge && typeof nativeBridge.play === 'function') {
+        nativeBridge.play(streamUrl, item.name || '');
+        return true;
+      }
       throw new Error('Native player unavailable');
-    }
+    }, { statusText: 'Reconnecting...' });
   } catch (err) {
     setLibraryStatus('Unable to open file');
   }
