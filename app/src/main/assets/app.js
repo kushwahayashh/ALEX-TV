@@ -576,7 +576,6 @@ async function openLibraryFile(item) {
   if (!item || !item.path) return;
   try {
     setLibraryStatus('Opening file...');
-    await fetchJson(`${BACKEND_ROOT}/health`);
     const streamUrl = `${BACKEND_ROOT}/stream?path=${encodeURIComponent(item.path)}`;
     if (nativeBridge && typeof nativeBridge.play === 'function') {
       nativeBridge.play(streamUrl, item.name || '');
@@ -716,8 +715,6 @@ async function loadHomeContent(options = {}) {
 // ── Init ──
 async function init() {
   await loadHomeContent();
-  // Preload library in the background so it is ready when user opens it.
-  ensureLibraryLoaded();
 
   // Start focus on first content row
   nav.area = 0;
