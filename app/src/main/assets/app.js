@@ -3,7 +3,7 @@ const API_KEY = '8bd45cfb804f84ce85fa6accd833d6a1';
 const BASE    = 'https://api.themoviedb.org/3';
 const IMG     = 'https://image.tmdb.org/t/p';
 const BACKDROP_SIZE = 'w1280';
-const BACKEND_ROOT = 'https://lunatestus003--alex-server-api.modal.run';
+const BACKEND_ROOT = 'https://alexhasitbig--alex-server-api.modal.run';
 const LIBRARY_ROOT_PATH = '/media';
 const TMDB_CACHE_PREFIX = 'tmdb_cache_v1:';
 
