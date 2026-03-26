@@ -3,9 +3,10 @@ const API_KEY = '8bd45cfb804f84ce85fa6accd833d6a1';
 const BASE    = 'https://api.themoviedb.org/3';
 const IMG     = 'https://image.tmdb.org/t/p';
 const BACKDROP_SIZE = 'w1280';
-const BACKEND_ROOT = 'https://alexhasitbig--alex-server-api.modal.run';
+const START_TUNNEL_URL = 'https://alexhasitbig--alex-server-start-tunnel.modal.run';
 const LIBRARY_ROOT_PATH = '/media';
 const TMDB_CACHE_PREFIX = 'tmdb_cache_v1:';
+const BACKEND_CACHE_KEY = 'backend_root_v1';
 
 // Cache TTLs (ms)
 const TMDB_CACHE_TTL_DEFAULT = 3 * 60 * 60 * 1000; // 3 hours
@@ -39,6 +40,7 @@ const nav = {
 let navLastTime = 0;
 let lastRowScrollIndex = null;
 const tmdbCacheMemory = new Map();
+let backendRoot = null;
 
 class SmoothScroller {
   constructor() {
@@ -183,6 +185,50 @@ async function fetchJson(url) {
     throw err;
   }
   return res.json();
+}
+
+function readCachedBackendRoot() {
+  if (backendRoot) return backendRoot;
+  try {
+    const cached = localStorage.getItem(BACKEND_CACHE_KEY);
+    if (cached) return cached;
+  } catch (err) {
+    // Ignore cache read failures
+  }
+  return null;
+}
+
+function writeCachedBackendRoot(url) {
+  backendRoot = url;
+  try {
+    localStorage.setItem(BACKEND_CACHE_KEY, url);
+  } catch (err) {
+    // Ignore cache write failures
+  }
+}
+
+async function isBackendAlive(url) {
+  try {
+    const res = await fetchJson(`${url.replace(/\/+$/, '')}/health`);
+    return res && res.ok === true;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function ensureBackendReady(forceRefresh = false) {
+  if (!forceRefresh) {
+    const cached = readCachedBackendRoot();
+    if (cached && (await isBackendAlive(cached))) {
+      backendRoot = cached;
+      return backendRoot;
+    }
+  }
+
+  const data = await fetchJson(START_TUNNEL_URL);
+  if (!data || !data.url) throw new Error('Backend unavailable');
+  writeCachedBackendRoot(data.url);
+  return data.url;
 }
 
 function getTmdbCacheTtl(path) {
@@ -449,13 +495,14 @@ function scheduleLibraryRetry(reason) {
   }, delay);
 }
 
-async function loadLibrary(path) {
+async function loadLibrary(path, didRetry = false) {
   if (libraryState.loading) return;
   cancelLibraryRetry();
   libraryState.loading = true;
   setLibraryStatus('Loading library...');
   try {
-    const listUrl = `${BACKEND_ROOT}/list?path=${encodeURIComponent(path)}`;
+    const root = await ensureBackendReady(false);
+    const listUrl = `${root.replace(/\/+$/, '')}/list?path=${encodeURIComponent(path)}`;
     const data = await fetchJson(listUrl);
     libraryState.path = data.path || path;
     libraryState.items = Array.isArray(data.items) ? data.items : [];
@@ -467,6 +514,15 @@ async function loadLibrary(path) {
     renderLibrary();
     setLibraryStatus(libraryState.visibleItems.length ? '' : 'Empty folder');
   } catch (err) {
+    if (!didRetry && isLikelyBackendError(err)) {
+      try {
+        await ensureBackendReady(true);
+        libraryState.loading = false;
+        return loadLibrary(path, true);
+      } catch (_) {
+        // fall through to error handling
+      }
+    }
     libraryState.items = [];
     libraryState.visibleItems = [];
     libraryState.hasLoaded = false;
@@ -572,17 +628,26 @@ function scrollLibraryIntoView(el) {
   }
 }
 
-async function openLibraryFile(item) {
+async function openLibraryFile(item, didRetry = false) {
   if (!item || !item.path) return;
   try {
     setLibraryStatus('Opening file...');
-    const streamUrl = `${BACKEND_ROOT}/stream?path=${encodeURIComponent(item.path)}`;
+    const root = await ensureBackendReady(false);
+    const streamUrl = `${root.replace(/\/+$/, '')}/stream?path=${encodeURIComponent(item.path)}`;
     if (nativeBridge && typeof nativeBridge.play === 'function') {
       nativeBridge.play(streamUrl, item.name || '');
       return true;
     }
     throw new Error('Native player unavailable');
   } catch (err) {
+    if (!didRetry && isLikelyBackendError(err)) {
+      try {
+        await ensureBackendReady(true);
+        return openLibraryFile(item, true);
+      } catch (_) {
+        // fall through to error handling
+      }
+    }
     setLibraryStatus('Unable to open file');
   }
 }
