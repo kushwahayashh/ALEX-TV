@@ -669,6 +669,10 @@ function handleSettingsEnter() {
   if (!current) return;
   const action = current.dataset.action || current.id;
 
+  if (action === 'info' || action === 'settings-tunnel') {
+    return;
+  }
+
   if (action === 'update' || action === 'settings-update') {
     const btn = document.getElementById('settings-update-btn');
     if (!btn || btn.disabled) return;
@@ -702,6 +706,27 @@ function handleSettingsEnter() {
   }
 }
 
+async function updateTunnelUrlLabel(forceRefresh = false) {
+  const el = document.getElementById('settings-tunnel-url');
+  if (!el) return;
+
+  const cached = readCachedBackendRoot();
+  if (cached) {
+    el.textContent = cached;
+  } else {
+    el.textContent = 'Checking...';
+  }
+
+  try {
+    const url = await ensureBackendReady(forceRefresh);
+    el.textContent = url;
+  } catch (err) {
+    if (!cached) {
+      el.textContent = 'Unavailable';
+    }
+  }
+}
+
 function ensureLibraryLoaded() {
   if (!libraryState.loading) {
     loadLibrary(libraryState.path || LIBRARY_ROOT_PATH);
@@ -718,7 +743,7 @@ function createCard(movie, rowIdx, colIdx) {
 
   const img = document.createElement('img');
   img.className = 'card-poster';
-  img.alt = movie.title || movie.name;
+  img.alt = '';
   img.loading = 'lazy';
   img.src = posterURL(movie.poster_path);
 
@@ -813,6 +838,7 @@ function switchPage(page) {
     cancelLibraryRetry();
   }
   if (page === 'library') ensureLibraryLoaded();
+  if (page === 'settings') updateTunnelUrlLabel(false);
 }
 
 // ── Spatial Navigation ──
