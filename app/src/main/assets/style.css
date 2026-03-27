@@ -294,7 +294,7 @@ body {
   position: absolute;
   bottom: 45vh;
   left: 42px;
-  max-width: 480px;
+  max-width: 560px;
   z-index: 2;
 }
 
@@ -303,61 +303,70 @@ body {
 }
 
 #hero-title {
-  font-size: 2.8rem;
+  font-size: 3.2rem;
   font-weight: 700;
-  letter-spacing: -0.4px;
-  line-height: 1.1;
-  margin-bottom: 10px;
-  text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+  letter-spacing: -0.7px;
+  line-height: 1.05;
+  margin-bottom: 6px;
+  text-shadow: 0 6px 18px rgba(0,0,0,0.6);
 }
 
 #hero-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 10px;
+  gap: 4px;
+  margin-bottom: 12px;
 }
 
 .hero-badge {
   display: inline-flex;
   align-items: center;
-  padding: 3px 9px;
-  border-radius: 20px;
-  font-size: 0.78rem;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.82rem;
   font-weight: 600;
-  letter-spacing: 0.2px;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.hero-badge + .hero-badge::before {
+  content: "•";
+  margin: 0 8px 0 6px;
+  color: rgba(255,255,255,0.35);
 }
 
 .hero-year-badge {
-  background: rgba(255,255,255,0.12);
-  border: 1px solid rgba(255,255,255,0.2);
+  background: transparent;
+  border: none;
   color: #fff;
 }
 
 .hero-rating-badge {
-  background: rgba(255, 210, 60, 0.18);
-  border: 1px solid rgba(255, 210, 60, 0.4);
+  background: transparent;
+  border: none;
   color: #ffd23c;
+  letter-spacing: 0.03em;
+  text-transform: none;
 }
 
 .hero-genre-badge {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.15);
+  background: transparent;
+  border: none;
   color: rgba(255,255,255,0.75);
 }
 
 #hero-overview {
-  font-size: 0.95rem;
-  line-height: 1.5;
-  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.55;
+  color: rgba(255,255,255,0.82);
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  margin-bottom: 9px;
+  margin-bottom: 12px;
 }
 
 /* ── Content Rows ── */
