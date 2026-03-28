@@ -183,8 +183,23 @@ body {
   overflow: hidden;
 }
 
+#library-breadcrumbs {
+  margin-bottom: 10px;
+}
+
+#library-breadcrumbs .library-item {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+#library-breadcrumbs .library-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 #library-list {
-  height: calc(100vh - 84px);
+  height: calc(100vh - 120px);
   overflow-y: auto;
   scrollbar-width: none;
   will-change: scroll-position;

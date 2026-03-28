@@ -612,6 +612,7 @@ async function loadLibrary(path, didRetry = false) {
 }
 
 function renderLibrary() {
+  renderLibraryBreadcrumbs();
   const list = document.getElementById('library-list');
   if (!list) return;
   list.innerHTML = '';
@@ -684,11 +685,77 @@ function renderLibrary() {
   });
   list.appendChild(frag);
 
-  nav.libraryItems = Array.from(list.querySelectorAll('.library-item'));
+  nav.libraryItems = Array.from(document.querySelectorAll('#library .library-item.focusable'));
   nav.libraryIndex = clamp(nav.libraryIndex, 0, nav.libraryItems.length - 1);
   if (currentPage === 'library' && nav.area === 'library') {
     focusCurrent();
   }
+}
+
+function getFolderIconSvg() {
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" class="icon icon-tabler icons-tabler-filled icon-tabler-folder"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M9 3a1 1 0 0 1 .608 .206l.1 .087l2.706 2.707h6.586a3 3 0 0 1 2.995 2.824l.005 .176v8a3 3 0 0 1 -2.824 2.995l-.176 .005h-14a3 3 0 0 1 -2.995 -2.824l-.005 -.176v-11a3 3 0 0 1 2.824 -2.995l.176 -.005h4z" /></svg>';
+}
+
+function getLibraryPathSegments(path) {
+  const normalized = (path || LIBRARY_ROOT).replace(/\/+$/, '') || LIBRARY_ROOT;
+  const parts = normalized.split('/').filter(Boolean);
+  const segments = [];
+
+  if (!parts.length) {
+    return [{ label: 'Home', path: LIBRARY_ROOT }];
+  }
+
+  let current = '';
+  parts.forEach((part, index) => {
+    current += `/${part}`;
+    segments.push({
+      label: index === 0 ? 'Home' : part,
+      path: current,
+      isCurrent: index === parts.length - 1
+    });
+  });
+
+  if (segments[0] && segments[0].path !== LIBRARY_ROOT) {
+    segments.unshift({ label: 'Home', path: LIBRARY_ROOT, isCurrent: normalized === LIBRARY_ROOT });
+  } else if (segments[0]) {
+    segments[0].label = 'Home';
+  }
+
+  return segments;
+}
+
+function renderLibraryBreadcrumbs() {
+  const container = document.getElementById('library-breadcrumbs');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const segments = getLibraryPathSegments(libraryState.path || LIBRARY_ROOT);
+  const parentPath = getParentPath(libraryState.path || LIBRARY_ROOT);
+  const row = document.createElement('div');
+  row.className = 'library-item focusable';
+  row.tabIndex = -1;
+  row.dataset.type = 'breadcrumb';
+  row.dataset.path = parentPath || '';
+
+  const left = document.createElement('div');
+  left.className = 'library-left';
+
+  const icon = document.createElement('div');
+  icon.className = 'library-icon';
+  icon.innerHTML = getFolderIconSvg();
+
+  const content = document.createElement('div');
+  content.className = 'library-content';
+
+  const name = document.createElement('div');
+  name.className = 'library-name';
+  name.textContent = segments.map(segment => segment.label).join(' / ');
+  content.appendChild(name);
+
+  left.appendChild(icon);
+  left.appendChild(content);
+  row.appendChild(left);
+  container.appendChild(row);
 }
 
 function scrollLibraryIntoView(el) {
@@ -766,10 +833,20 @@ window.__refreshPlaybackProgress = function() {
 };
 
 function handleLibraryEnter() {
-  const item = (libraryState.visibleItems || [])[nav.libraryIndex];
+  const focused = (nav.libraryItems || [])[nav.libraryIndex];
+  if (!focused) return;
+  if (focused.dataset.type === 'breadcrumb') {
+    const parent = focused.dataset.path || getParentPath(libraryState.path || LIBRARY_ROOT);
+    if (parent) {
+      nav.libraryIndex = 0;
+      loadLibrary(parent);
+    }
+    return;
+  }
+  const item = (libraryState.visibleItems || [])[Math.max(0, nav.libraryIndex - 1)];
   if (!item) return;
   if (item.type === 'folder') {
-    nav.libraryIndex = 0;
+    nav.libraryIndex = 1;
     loadLibrary(item.path);
   } else {
     openLibraryFile(item);
