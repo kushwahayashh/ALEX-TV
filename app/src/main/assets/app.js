@@ -125,6 +125,19 @@ const libraryState = {
   retryTimer: null,
 };
 
+const heroBackdropEl = document.getElementById('hero-backdrop');
+const heroTitleEl = document.getElementById('hero-title');
+const heroMetaEl = document.getElementById('hero-meta');
+const heroOverviewEl = document.getElementById('hero-overview');
+const contentEl = document.getElementById('content');
+const libraryEl = document.getElementById('library');
+const settingsPageEl = document.getElementById('settings-page');
+const comingSoonEl = document.getElementById('coming-soon');
+const libraryListEl = document.getElementById('library-list');
+const libraryBreadcrumbsEl = document.getElementById('library-breadcrumbs');
+const rowEls = Array.from(document.querySelectorAll('.row'));
+const rowScrollEls = rowEls.map(row => row.querySelector('.row-scroll'));
+
 // ── Helpers ──
 const nativeBridge = typeof window !== 'undefined' ? window.AndroidBridge : null;
 const nativeCallbacks = {};
@@ -438,11 +451,11 @@ let heroTimer = null;
 let heroFadeTimer = null;
 let heroPending = null;
 let heroCurrentId = null;
+let heroPendingId = null;
+let heroPreloadImage = null;
 let genreMap = {};
 
 function renderHeroMeta(movie) {
-  const meta = document.getElementById('hero-meta');
-  if (!meta) return;
   const parts = [];
 
   const y = year(movie.release_date || movie.first_air_date);
@@ -458,36 +471,69 @@ function renderHeroMeta(movie) {
     .join('');
   if (genres) parts.push(genres);
 
-  meta.innerHTML = parts.join('');
+  if (heroMetaEl) {
+    heroMetaEl.innerHTML = parts.join('');
+  }
 }
 
 function setHero(movie) {
-  const backdrop = document.getElementById('hero-backdrop');
+  if (!movie || !heroBackdropEl || !heroTitleEl || !heroOverviewEl) return;
 
+  const nextPendingId = movie.id || movie.title || movie.name || null;
+  if (nextPendingId && (nextPendingId === heroCurrentId || nextPendingId === heroPendingId)) return;
   heroPending = movie;
+  heroPendingId = nextPendingId;
   clearTimeout(heroTimer);
   clearTimeout(heroFadeTimer);
+  if (heroPreloadImage) {
+    heroPreloadImage.onload = null;
+    heroPreloadImage.onerror = null;
+    heroPreloadImage = null;
+  }
 
   heroTimer = setTimeout(() => {
     const next = heroPending;
     heroPending = null;
+    heroPendingId = null;
     if (!next) return;
 
     const nextId = next.id || next.title || next.name || null;
     if (nextId && nextId === heroCurrentId) return;
-    heroCurrentId = nextId;
+    const nextBackdropUrl = backdropURL(next.backdrop_path);
 
-    backdrop.className = 'fade-out';
+    const applyHero = () => {
+      heroCurrentId = nextId;
+      heroBackdropEl.className = 'fade-out';
+      heroFadeTimer = setTimeout(() => {
+        heroBackdropEl.style.backgroundImage = nextBackdropUrl ? `url(${nextBackdropUrl})` : '';
+        heroTitleEl.textContent = next.title || next.name || '';
+        renderHeroMeta(next);
+        heroOverviewEl.textContent = next.overview || '';
+        requestAnimationFrame(() => {
+          heroBackdropEl.className = 'fade-in';
+        });
+      }, 140);
+    };
 
-    heroFadeTimer = setTimeout(() => {
-      backdrop.style.backgroundImage = `url(${backdropURL(next.backdrop_path)})`;
-      document.getElementById('hero-title').textContent = next.title || next.name;
-      renderHeroMeta(next);
-      document.getElementById('hero-overview').textContent = next.overview;
+    if (!nextBackdropUrl) {
+      applyHero();
+      return;
+    }
 
-      backdrop.className = 'fade-in';
-    }, 220);
-  }, 400);
+    const img = new Image();
+    heroPreloadImage = img;
+    img.onload = () => {
+      if (heroPreloadImage !== img) return;
+      heroPreloadImage = null;
+      applyHero();
+    };
+    img.onerror = () => {
+      if (heroPreloadImage !== img) return;
+      heroPreloadImage = null;
+      applyHero();
+    };
+    img.src = nextBackdropUrl;
+  }, 180);
 }
 
 // ── Library ──
@@ -613,7 +659,7 @@ async function loadLibrary(path, didRetry = false) {
 
 function renderLibrary() {
   renderLibraryBreadcrumbs();
-  const list = document.getElementById('library-list');
+  const list = libraryListEl;
   if (!list) return;
   list.innerHTML = '';
 
@@ -725,7 +771,7 @@ function getLibraryPathSegments(path) {
 }
 
 function renderLibraryBreadcrumbs() {
-  const container = document.getElementById('library-breadcrumbs');
+  const container = libraryBreadcrumbsEl;
   if (!container) return;
   container.innerHTML = '';
 
@@ -760,7 +806,8 @@ function renderLibraryBreadcrumbs() {
 
 function scrollLibraryIntoView(el) {
   if (!el) return;
-  const list = document.getElementById('library-list');
+  const list = libraryListEl;
+  if (!list) return;
   const elTop = el.offsetTop;
   const elHeight = el.offsetHeight;
   
@@ -1025,29 +1072,31 @@ function createCard(movie, rowIdx, colIdx) {
 }
 
 function renderRow(rowEl, movies, rowIdx) {
-  const scroll = rowEl.querySelector('.row-scroll');
-  scroll.innerHTML = '';
+  const scroll = rowScrollEls[rowIdx] || rowEl.querySelector('.row-scroll');
+  const frag = document.createDocumentFragment();
   rowEl.dataset.rowIndex = rowIdx;
   const focusables = [];
   nav.movies[rowIdx] = movies;
   movies.forEach((movie, i) => {
     const card = createCard(movie, rowIdx, i);
-    scroll.appendChild(card);
+    frag.appendChild(card);
     focusables.push(card);
   });
+  scroll.replaceChildren(frag);
   nav.rows[rowIdx] = focusables;
 }
 
 // ── Skeleton loaders ──
 function showSkeletons() {
-  document.querySelectorAll('.row-scroll').forEach(scroll => {
-    scroll.innerHTML = '';
+  rowScrollEls.forEach(scroll => {
+    const frag = document.createDocumentFragment();
     for (let i = 0; i < 8; i++) {
       const el = document.createElement('div');
       el.className = 'card skeleton';
       el.innerHTML = '<img class="card-poster" src="" alt="">';
-      scroll.appendChild(el);
+      frag.appendChild(el);
     }
+    scroll.replaceChildren(frag);
   });
 }
 
@@ -1069,7 +1118,6 @@ async function loadHomeContent(options = {}) {
   const heroMovie = results[0].results[0];
   if (heroMovie) setHero(heroMovie);
 
-  const rowEls = document.querySelectorAll('.row');
   results.forEach((data, i) => {
     renderRow(rowEls[i], data.results, i);
   });
@@ -1091,21 +1139,15 @@ const settingsItems = Array.from(document.querySelectorAll('.settings-item.focus
 let currentPage = 'home';
 
 function switchPage(page) {
-  const hero = document.getElementById('hero');
-  const content = document.getElementById('content');
-  const library = document.getElementById('library');
-  const settings = document.getElementById('settings-page');
-  const overlay = document.getElementById('coming-soon');
-
   navPills.forEach(p => p.classList.toggle('active', p.dataset.page === page));
   currentPage = page;
   updateNavState();
 
-  hero.style.display = page === 'home' ? '' : 'none';
-  content.style.display = page === 'home' ? '' : 'none';
-  library.classList.toggle('hidden', page !== 'library');
-  settings.classList.toggle('hidden', page !== 'settings');
-  overlay.classList.toggle('hidden', true);
+  if (heroBackdropEl) heroBackdropEl.parentElement.style.display = page === 'home' ? '' : 'none';
+  if (contentEl) contentEl.style.display = page === 'home' ? '' : 'none';
+  if (libraryEl) libraryEl.classList.toggle('hidden', page !== 'library');
+  if (settingsPageEl) settingsPageEl.classList.toggle('hidden', page !== 'settings');
+  if (comingSoonEl) comingSoonEl.classList.toggle('hidden', true);
 
   if (page !== 'library') {
     cancelLibraryRetry();
@@ -1160,7 +1202,7 @@ function focusCurrent() {
 }
 
 function scrollToRow(el) {
-  const content = document.getElementById('content');
+  const content = contentEl;
   const rowEl = el.closest('.row');
   if (!rowEl) return;
   const rowIdx = Number(rowEl.dataset.rowIndex);

@@ -335,22 +335,6 @@ body {
     );
 }
 
-#hero-gradient::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: repeating-radial-gradient(
-    circle at 0 0,
-    rgba(255,255,255,0.04) 0,
-    rgba(255,255,255,0.04) 1px,
-    transparent 1px,
-    transparent 2px
-  );
-  opacity: 0.35;
-  mix-blend-mode: soft-light;
-  pointer-events: none;
-}
-
 #hero-content {
   position: absolute;
   bottom: 45vh;
@@ -440,8 +424,6 @@ body {
   z-index: 2;
   overflow-y: hidden;
   padding-bottom: 15px;
-  mask-image: linear-gradient(to bottom, transparent 0%, black 8%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 8%);
 }
 
 .row {
