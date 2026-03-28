@@ -10,6 +10,7 @@ import android.util.TypedValue
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -580,26 +581,54 @@ private fun BoxScope.PlayerBottomControls(
 ) {
     var currentPositionMs by remember(exoPlayer) { mutableLongStateOf(0L) }
     var durationMs by remember(exoPlayer) { mutableLongStateOf(0L) }
+    var bufferedPositionMs by remember(exoPlayer) { mutableLongStateOf(0L) }
     var scrubPositionMs by remember(exoPlayer) { mutableLongStateOf(0L) }
     var isScrubbing by remember(exoPlayer) { mutableStateOf(false) }
+
+    fun syncPlayerTimelineState() {
+        currentPositionMs = exoPlayer.currentPosition
+        bufferedPositionMs = exoPlayer.bufferedPosition
+        val rawDuration = exoPlayer.duration
+        durationMs = if (rawDuration > 0 && rawDuration != C.TIME_UNSET) rawDuration else 0L
+    }
+
+    DisposableEffect(exoPlayer) {
+        syncPlayerTimelineState()
+        val listener = object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                if (
+                    events.contains(Player.EVENT_POSITION_DISCONTINUITY) ||
+                    events.contains(Player.EVENT_TIMELINE_CHANGED) ||
+                    events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION) ||
+                    events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED) ||
+                    events.contains(Player.EVENT_IS_PLAYING_CHANGED)
+                ) {
+                    syncPlayerTimelineState()
+                }
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose {
+            exoPlayer.removeListener(listener)
+        }
+    }
 
     LaunchedEffect(exoPlayer, controlsVisible, isScrubbing) {
         while (isActive) {
             if (!controlsVisible || isScrubbing) {
-                delay(120)
+                delay(80)
                 continue
             }
 
-            currentPositionMs = exoPlayer.currentPosition
-            val rawDuration = exoPlayer.duration
-            durationMs = if (rawDuration > 0 && rawDuration != C.TIME_UNSET) rawDuration else 0L
-            delay(if (exoPlayer.isPlaying) 100 else 250)
+            syncPlayerTimelineState()
+            delay(if (exoPlayer.isPlaying) 50 else 150)
         }
     }
 
     LaunchedEffect(controlsVisible) {
         if (!controlsVisible) {
             isScrubbing = false
+            syncPlayerTimelineState()
         }
     }
 
@@ -615,6 +644,7 @@ private fun BoxScope.PlayerBottomControls(
         PlayerSeekBar(
             positionMs = displayedPositionMs,
             durationMs = durationMs,
+            bufferedPositionMs = bufferedPositionMs,
             isSeekable = durationMs > 0L && exoPlayer.isCurrentMediaItemSeekable,
             onInteraction = onInteraction,
             controlsEnabled = controlsVisible,
@@ -731,6 +761,7 @@ private fun Modifier.playerVerticalScrim(colors: List<Color>): Modifier = drawWi
 fun PlayerSeekBar(
     positionMs: Long,
     durationMs: Long,
+    bufferedPositionMs: Long,
     isSeekable: Boolean,
     onInteraction: () -> Unit,
     controlsEnabled: Boolean,
@@ -754,18 +785,44 @@ fun PlayerSeekBar(
         }
     }
 
+    fun cancelActiveSeek(resetPreview: Boolean) {
+        seekJob?.cancel()
+        seekJob = null
+        seekStartNanos = 0L
+        didSeekDuringHold = false
+        if (resetPreview) {
+            previewPositionMs = positionMs
+        }
+    }
+
     LaunchedEffect(positionMs, seekJob) {
         if (seekJob == null) {
             previewPositionMs = positionMs
         }
     }
 
+    LaunchedEffect(controlsEnabled) {
+        if (!controlsEnabled) {
+            cancelActiveSeek(resetPreview = true)
+        }
+    }
+
     val isDurationKnown = durationMs > 0L
     val barHeight = 4.dp
     val dotSize by animateDpAsState(targetValue = if (isProgressFocused) 14.dp else 10.dp)
-    
+
     val progress = if (isDurationKnown) previewPositionMs.toFloat() / durationMs.toFloat() else 0f
-    val animatedProgress = progress.coerceIn(0f, 1f)
+    val bufferedProgress = if (isDurationKnown) bufferedPositionMs.toFloat() / durationMs.toFloat() else 0f
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 90, easing = LinearEasing),
+        label = "seekbar_progress"
+    )
+    val animatedBufferedProgress by animateFloatAsState(
+        targetValue = bufferedProgress.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 140, easing = LinearEasing),
+        label = "seekbar_buffered_progress"
+    )
     val containerHeight = 16.dp
 
     Column(
@@ -773,9 +830,12 @@ fun PlayerSeekBar(
             .fillMaxWidth()
             .focusRequester(focusRequester)
             .focusProperties { down = downRequester }
-            .onFocusChanged { 
+            .onFocusChanged {
                 if (isProgressFocused != it.isFocused) {
                     isProgressFocused = it.isFocused
+                }
+                if (!it.isFocused) {
+                    cancelActiveSeek(resetPreview = true)
                 }
                 if (it.isFocused) onInteraction()
             }
@@ -792,11 +852,12 @@ fun PlayerSeekBar(
                         if (seekJob != null && seekDirection == newDirection) {
                             return@onKeyEvent true
                         }
+                        val hadActiveSeek = seekJob != null
                         seekJob?.cancel()
                         seekDirection = newDirection
                         seekStartNanos = System.nanoTime()
                         didSeekDuringHold = false
-                        previewPositionMs = positionMs
+                        previewPositionMs = if (hadActiveSeek) previewPositionMs else positionMs
                         seekJob = scope.launch {
                             delay(120)
                             var lastFrameNanos = withFrameNanos { it }
@@ -832,6 +893,7 @@ fun PlayerSeekBar(
                             (positionMs + (10_000L * seekDirection)).coerceIn(0L, durationMs)
                         }
                         seekStartNanos = 0L
+                        didSeekDuringHold = false
                         previewPositionMs = finalPosition
                         onSeekCommit(finalPosition)
                         true
@@ -862,6 +924,13 @@ fun PlayerSeekBar(
                         .clip(CircleShape)
                         .background(ProgressTrack)
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(animatedBufferedProgress)
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.22f))
+                    )
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(animatedProgress)
