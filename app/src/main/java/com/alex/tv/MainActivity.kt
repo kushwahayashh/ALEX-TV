@@ -144,22 +144,15 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN && event.keyCode == KeyEvent.KEYCODE_BACK) {
             handleBackPress()
             return true
         }
-        if (shouldThrottleNavKey(keyCode, event)) {
+        if (shouldThrottleNavKey(event)) {
             return true
         }
-        return super.onKeyDown(keyCode, event)
-    }
-
-    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-        if (isThrottledNavKey(keyCode) && keyCode == lastNavKeyCode) {
-            lastNavKeyCode = KeyEvent.KEYCODE_UNKNOWN
-        }
-        return super.onKeyUp(keyCode, event)
+        return super.dispatchKeyEvent(event)
     }
 
     private fun handleBackPress() {
@@ -205,11 +198,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun shouldThrottleNavKey(keyCode: Int, event: KeyEvent?): Boolean {
+    private fun shouldThrottleNavKey(event: KeyEvent): Boolean {
+        if (event.action != KeyEvent.ACTION_DOWN) return false
+        val keyCode = event.keyCode
         if (!isThrottledNavKey(keyCode)) return false
 
         val now = SystemClock.uptimeMillis()
-        val isRepeat = (event?.repeatCount ?: 0) > 0 || keyCode == lastNavKeyCode
+        val sinceLast = now - lastNavKeyAtMs
+        val sameDirectionBurst = keyCode == lastNavKeyCode && sinceLast < 220L
+        val isRepeat = event.repeatCount > 0 || sameDirectionBurst
         val throttleMs = if (isRepeat) 160L else 30L
         val shouldThrottle = now - lastNavKeyAtMs < throttleMs
 
