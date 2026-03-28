@@ -53,8 +53,7 @@ body {
   outline: none;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  transition: transform 0.12s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.12s cubic-bezier(0.25, 0.1, 0.25, 1), background 0.12s cubic-bezier(0.25, 0.1, 0.25, 1), color 0.12s cubic-bezier(0.25, 0.1, 0.25, 1);
-  will-change: transform, box-shadow, background, color;
+  transition: transform 0.12s cubic-bezier(0.25, 0.1, 0.25, 1), background 0.12s cubic-bezier(0.25, 0.1, 0.25, 1), color 0.12s cubic-bezier(0.25, 0.1, 0.25, 1), border-color 0.12s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .nav-pill.active {
@@ -202,7 +201,6 @@ body {
   height: calc(100vh - 120px);
   overflow-y: auto;
   scrollbar-width: none;
-  will-change: scroll-position;
   transform: translateZ(0);
 }
 
@@ -218,7 +216,7 @@ body {
   background: rgba(255,255,255,0.06);
   margin-bottom: 6px;
   outline: none;
-  will-change: transform, box-shadow;
+  transition: background 0.12s ease, outline-color 0.12s ease;
 }
 
 .library-left {
@@ -285,7 +283,8 @@ body {
 
 .library-item.focusable:focus {
   transform: none;
-  box-shadow: inset 0 0 0 2px var(--focus-ring);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
   background: rgba(255,255,255,0.1);
 }
 
@@ -447,7 +446,6 @@ body {
   scrollbar-width: none;
   clip-path: inset(-15px -0px -15px -0px);
   position: relative;
-  will-change: scroll-position;
   transform: translateZ(0);
   scroll-behavior: auto;
 }
@@ -463,7 +461,6 @@ body {
   outline: none;
   transition: transform 0.12s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.12s cubic-bezier(0.25, 0.1, 0.25, 1);
   background: var(--card);
-  will-change: transform, box-shadow;
   contain: layout style paint;
 }
 
@@ -491,8 +488,11 @@ body {
 /* ── Focus States (TV D-pad) ── */
 .focusable:focus {
   transform: scale(1.08);
-  box-shadow: 0 0 0 2px var(--focus-ring);
   z-index: 10;
+}
+
+.card.focusable:focus {
+  box-shadow: 0 0 0 2px var(--focus-ring);
 }
 
 /* ── Loading Skeleton ── */

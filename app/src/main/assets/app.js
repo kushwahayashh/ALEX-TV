@@ -47,7 +47,6 @@ class SmoothScroller {
   constructor() {
     this.targets = new Map();
     this.running = false;
-    this.lastTime = 0;
   }
   
   scrollTo(el, targetX, targetY) {
@@ -67,8 +66,7 @@ class SmoothScroller {
     
     if (!this.running) {
       this.running = true;
-      this.lastTime = performance.now();
-      requestAnimationFrame((time) => this.tick(time));
+      requestAnimationFrame(() => this.tick());
     }
   }
   
@@ -81,12 +79,9 @@ class SmoothScroller {
     return dx > 2 || dy > 2;
   }
   
-  tick(time) {
+  tick() {
     let active = false;
-    const dt = Math.min(time - this.lastTime, 50);
-    this.lastTime = time;
-
-    const lerpFactor = 1 - Math.exp(-0.025 * dt);
+    const lerpFactor = 0.22;
 
     this.targets.forEach((state, el) => {
       const dx = state.tx - state.x;
@@ -106,7 +101,7 @@ class SmoothScroller {
     });
     
     if (active) {
-      requestAnimationFrame((t) => this.tick(t));
+      requestAnimationFrame(() => this.tick());
     } else {
       this.running = false;
     }
@@ -810,22 +805,13 @@ function scrollLibraryIntoView(el) {
   if (!list) return;
   const elTop = el.offsetTop;
   const elHeight = el.offsetHeight;
-  
-  let currentScroll = parseFloat(list.dataset.targetScroll);
-  if (isNaN(currentScroll)) currentScroll = list.scrollTop;
-  
   const listHeight = list.clientHeight;
-  let targetScroll = currentScroll;
-  const padding = 60;
+  const targetScroll = Math.max(0, elTop + (elHeight / 2) - (listHeight / 2));
+  const currentScroll = parseFloat(list.dataset.targetScroll);
+  const fallbackScroll = Number.isNaN(currentScroll) ? list.scrollTop : currentScroll;
 
-  if (elTop < currentScroll + padding) {
-    targetScroll = Math.max(0, elTop - padding);
-  } else if (elTop + elHeight > currentScroll + listHeight - padding) {
-    targetScroll = elTop + elHeight - listHeight + padding;
-  }
-
-  if (targetScroll !== currentScroll) {
-    list.dataset.targetScroll = targetScroll;
+  if (Math.abs(targetScroll - fallbackScroll) > 1) {
+    list.dataset.targetScroll = String(targetScroll);
     scroller.scrollTo(list, null, targetScroll);
   }
 }
@@ -1230,26 +1216,17 @@ function scrollIntoRow(el) {
   
   const elLeft = rowPaddingLeft + (colIdx * (cardWidth + cardGap));
   const elWidth = cardWidth;
-  const padding = 80; 
   
   // Hardcode visible width assuming 1080p / 720p scaled to CSS pixels.
   // Using window.innerWidth once is much cheaper than reading clientWidth repeatedly.
   if (!window.cachedInnerWidth) window.cachedInnerWidth = window.innerWidth;
   const scrollWidth = window.cachedInnerWidth;
-  
-  let currentScroll = parseFloat(scroll.dataset.targetScroll);
-  if (isNaN(currentScroll)) currentScroll = scroll.scrollLeft;
-  
-  let targetScroll = currentScroll;
+  const targetScroll = Math.max(0, elLeft + (elWidth / 2) - (scrollWidth / 2));
+  const currentScroll = parseFloat(scroll.dataset.targetScroll);
+  const fallbackScroll = Number.isNaN(currentScroll) ? scroll.scrollLeft : currentScroll;
 
-  if (elLeft < currentScroll + padding) {
-    targetScroll = Math.max(0, elLeft - padding);
-  } else if (elLeft + elWidth > currentScroll + scrollWidth - padding) {
-    targetScroll = elLeft + elWidth - scrollWidth + padding;
-  }
-
-  if (targetScroll !== currentScroll) {
-    scroll.dataset.targetScroll = targetScroll;
+  if (Math.abs(targetScroll - fallbackScroll) > 1) {
+    scroll.dataset.targetScroll = String(targetScroll);
     scroller.scrollTo(scroll, targetScroll, null);
   }
 }
