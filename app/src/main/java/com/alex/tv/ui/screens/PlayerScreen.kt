@@ -584,6 +584,7 @@ private fun BoxScope.PlayerBottomControls(
     var bufferedPositionMs by remember(exoPlayer) { mutableLongStateOf(0L) }
     var scrubPositionMs by remember(exoPlayer) { mutableLongStateOf(0L) }
     var isScrubbing by remember(exoPlayer) { mutableStateOf(false) }
+    var resumeAfterScrub by remember(exoPlayer) { mutableStateOf(false) }
 
     fun syncPlayerTimelineState() {
         currentPositionMs = exoPlayer.currentPosition
@@ -651,7 +652,13 @@ private fun BoxScope.PlayerBottomControls(
             focusRequester = seekbarFocusRequester,
             downRequester = playPauseFocusRequester,
             onSeekPreview = { previewPosition ->
-                if (!isScrubbing) isScrubbing = true
+                if (!isScrubbing) {
+                    resumeAfterScrub = exoPlayer.isPlaying
+                    if (resumeAfterScrub) {
+                        exoPlayer.pause()
+                    }
+                    isScrubbing = true
+                }
                 scrubPositionMs = previewPosition
             },
             onSeekCommit = { finalPosition ->
@@ -659,6 +666,10 @@ private fun BoxScope.PlayerBottomControls(
                 currentPositionMs = finalPosition
                 isScrubbing = false
                 exoPlayer.seekTo(finalPosition)
+                if (resumeAfterScrub) {
+                    exoPlayer.play()
+                }
+                resumeAfterScrub = false
             }
         )
 
