@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Build
 import android.os.Environment
+import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowInsets
@@ -38,6 +39,8 @@ class MainActivity : AppCompatActivity() {
     private var currentPage: String = "home"
     private var libraryPath: String = "/media"
     private var downloadId: Long = -1L
+    private var lastNavKeyCode: Int = KeyEvent.KEYCODE_UNKNOWN
+    private var lastNavKeyAtMs: Long = 0L
 
     private val onDownloadComplete = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -146,7 +149,17 @@ class MainActivity : AppCompatActivity() {
             handleBackPress()
             return true
         }
+        if (shouldThrottleNavKey(keyCode, event)) {
+            return true
+        }
         return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        if (isThrottledNavKey(keyCode) && keyCode == lastNavKeyCode) {
+            lastNavKeyCode = KeyEvent.KEYCODE_UNKNOWN
+        }
+        return super.onKeyUp(keyCode, event)
     }
 
     private fun handleBackPress() {
@@ -177,6 +190,35 @@ class MainActivity : AppCompatActivity() {
     private fun enableFileAccess(settings: WebSettings) {
         settings.allowFileAccessFromFileURLs = true
         settings.allowUniversalAccessFromFileURLs = true
+    }
+
+    private fun isThrottledNavKey(keyCode: Int): Boolean {
+        return when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN,
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_DPAD_CENTER,
+            KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_NUMPAD_ENTER -> true
+            else -> false
+        }
+    }
+
+    private fun shouldThrottleNavKey(keyCode: Int, event: KeyEvent?): Boolean {
+        if (!isThrottledNavKey(keyCode)) return false
+
+        val now = SystemClock.uptimeMillis()
+        val isRepeat = (event?.repeatCount ?: 0) > 0 || keyCode == lastNavKeyCode
+        val throttleMs = if (isRepeat) 160L else 30L
+        val shouldThrottle = now - lastNavKeyAtMs < throttleMs
+
+        if (!shouldThrottle) {
+            lastNavKeyCode = keyCode
+            lastNavKeyAtMs = now
+        }
+
+        return shouldThrottle
     }
 
     private inner class NativeBridge {
