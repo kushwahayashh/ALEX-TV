@@ -692,12 +692,18 @@ private fun BoxScope.PlayerBottomControls(
             controlsEnabled = controlsVisible,
             focusRequester = seekbarFocusRequester,
             downRequester = playPauseFocusRequester,
-            onSeekPreview = { previewPosition ->
+            onSeekStart = {
                 if (!isScrubbing) {
                     resumeAfterScrub = exoPlayer.isPlaying
                     if (resumeAfterScrub) {
                         exoPlayer.pause()
                     }
+                    isScrubbing = true
+                    scrubPositionMs = currentPositionMs
+                }
+            },
+            onSeekPreview = { previewPosition ->
+                if (!isScrubbing) {
                     isScrubbing = true
                 }
                 scrubPositionMs = previewPosition
@@ -819,6 +825,7 @@ fun PlayerSeekBar(
     controlsEnabled: Boolean,
     focusRequester: FocusRequester,
     downRequester: FocusRequester,
+    onSeekStart: () -> Unit,
     onSeekPreview: (Long) -> Unit,
     onSeekCommit: (Long) -> Unit
 ) {
@@ -903,6 +910,9 @@ fun PlayerSeekBar(
                         val newDirection = if (isLeft) -1 else 1
                         if (seekJob != null && seekDirection == newDirection) {
                             return@onKeyEvent true
+                        }
+                        if (seekJob == null) {
+                            onSeekStart()
                         }
                         val hadActiveSeek = seekJob != null
                         seekJob?.cancel()
