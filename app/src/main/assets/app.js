@@ -926,10 +926,22 @@ function createCard(movie, rowIdx, colIdx) {
   el.dataset.col = colIdx;
 
   const img = document.createElement('img');
-  img.className = 'card-poster';
+  img.className = 'card-poster is-loading';
   img.alt = '';
   img.loading = 'lazy';
+  img.addEventListener('load', () => {
+    img.classList.remove('is-loading');
+    img.classList.add('is-loaded');
+  }, { once: true });
+  img.addEventListener('error', () => {
+    img.classList.remove('is-loading');
+  }, { once: true });
   img.src = posterURL(movie.poster_path);
+
+  if (img.complete && img.naturalWidth > 0) {
+    img.classList.remove('is-loading');
+    img.classList.add('is-loaded');
+  }
 
   el.appendChild(img);
   return el;
