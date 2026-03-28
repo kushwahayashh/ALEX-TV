@@ -40,6 +40,7 @@ const nav = {
 let navLastTime = 0;
 let lastRowScrollIndex = null;
 const tmdbCacheMemory = new Map();
+const playbackProgressByPath = new Map();
 let backendRoot = null;
 
 class SmoothScroller {
@@ -143,6 +144,45 @@ function nativeFetchJson(url) {
   });
 }
 
+function nativeGetPlaybackProgress(paths) {
+  return new Promise((resolve, reject) => {
+    const id = `cb_${Date.now()}_${nativeCbSeq++}`;
+    nativeCallbacks[id] = { resolve, reject };
+    if (!nativeBridge || typeof nativeBridge.getPlaybackProgress !== 'function') {
+      delete nativeCallbacks[id];
+      resolve({});
+      return;
+    }
+    nativeBridge.getPlaybackProgress(JSON.stringify(paths || []), id);
+  });
+}
+
+function nativeGetPlaybackHistorySummary() {
+  return new Promise((resolve, reject) => {
+    const id = `cb_${Date.now()}_${nativeCbSeq++}`;
+    nativeCallbacks[id] = { resolve, reject };
+    if (!nativeBridge || typeof nativeBridge.getPlaybackHistorySummary !== 'function') {
+      delete nativeCallbacks[id];
+      resolve({ count: 0, lastUpdatedAt: 0, hasHistory: false });
+      return;
+    }
+    nativeBridge.getPlaybackHistorySummary(id);
+  });
+}
+
+function nativeClearPlaybackHistory() {
+  return new Promise((resolve, reject) => {
+    const id = `cb_${Date.now()}_${nativeCbSeq++}`;
+    nativeCallbacks[id] = { resolve, reject };
+    if (!nativeBridge || typeof nativeBridge.clearPlaybackHistory !== 'function') {
+      delete nativeCallbacks[id];
+      resolve({ count: 0, lastUpdatedAt: 0, hasHistory: false });
+      return;
+    }
+    nativeBridge.clearPlaybackHistory(id);
+  });
+}
+
 function updateNavState() {
   if (!nativeBridge || typeof nativeBridge.setNavState !== 'function') return;
   nativeBridge.setNavState(currentPage, libraryState.path || LIBRARY_ROOT);
@@ -168,6 +208,36 @@ window.__nativeFetchResolve = function(id, ok, payload) {
       try { err.body = JSON.parse(httpMatch[2]); } catch (_) {}
     }
     cb.reject(err);
+  }
+};
+
+window.__nativePlaybackProgressResolve = function(id, ok, payload) {
+  const cb = nativeCallbacks[id];
+  if (!cb) return;
+  delete nativeCallbacks[id];
+  if (ok) {
+    try {
+      cb.resolve(JSON.parse(payload));
+    } catch (err) {
+      cb.reject(err);
+    }
+  } else {
+    cb.reject(new Error(payload || 'Playback progress unavailable'));
+  }
+};
+
+window.__nativePlaybackHistoryResolve = function(id, ok, payload) {
+  const cb = nativeCallbacks[id];
+  if (!cb) return;
+  delete nativeCallbacks[id];
+  if (ok) {
+    try {
+      cb.resolve(JSON.parse(payload));
+    } catch (err) {
+      cb.reject(err);
+    }
+  } else {
+    cb.reject(new Error(payload || 'Playback history unavailable'));
   }
 };
 
@@ -510,6 +580,7 @@ async function loadLibrary(path, didRetry = false) {
     libraryState.hasLoaded = true;
     libraryState.hasError = false;
     libraryState.retryCount = 0;
+    await refreshLibraryPlaybackProgress(libraryState.items);
     updateNavState();
     renderLibrary();
     setLibraryStatus(libraryState.visibleItems.length ? '' : 'Empty folder');
@@ -527,6 +598,7 @@ async function loadLibrary(path, didRetry = false) {
     libraryState.visibleItems = [];
     libraryState.hasLoaded = false;
     libraryState.hasError = true;
+    playbackProgressByPath.clear();
     renderLibrary();
     if (isLikelyBackendError(err)) {
       setLibraryStatus('Backend unavailable');
@@ -579,10 +651,26 @@ function renderLibrary() {
     name.className = 'library-name';
     name.textContent = item.name || item.path || 'Untitled';
 
+    const content = document.createElement('div');
+    content.className = 'library-content';
+    content.appendChild(name);
+
+    const progressEntry = item.type === 'file' ? playbackProgressByPath.get(item.path || '') : null;
+    const progressValue = Math.max(0, Math.min(1, Number(progressEntry && progressEntry.progress) || 0));
+    if (progressValue > 0) {
+      const progressTrack = document.createElement('div');
+      progressTrack.className = 'library-progress';
+      const progressFill = document.createElement('div');
+      progressFill.className = 'library-progress-fill';
+      progressFill.style.width = `${Math.max(progressValue * 100, 2)}%`;
+      progressTrack.appendChild(progressFill);
+      content.appendChild(progressTrack);
+    }
+
     const left = document.createElement('div');
     left.className = 'library-left';
     left.appendChild(icon);
-    left.appendChild(name);
+    left.appendChild(content);
 
     const meta = document.createElement('div');
     meta.className = 'library-meta';
@@ -635,7 +723,7 @@ async function openLibraryFile(item, didRetry = false) {
     const root = await ensureBackendReady(false);
     const streamUrl = `${root.replace(/\/+$/, '')}/stream?path=${encodeURIComponent(item.path)}`;
     if (nativeBridge && typeof nativeBridge.play === 'function') {
-      nativeBridge.play(streamUrl, item.name || '');
+      nativeBridge.play(streamUrl, item.name || '', item.path || '');
       return true;
     }
     throw new Error('Native player unavailable');
@@ -651,6 +739,31 @@ async function openLibraryFile(item, didRetry = false) {
     setLibraryStatus('Unable to open file');
   }
 }
+
+async function refreshLibraryPlaybackProgress(items = libraryState.items) {
+  const paths = (items || [])
+    .filter(item => item && item.type === 'file' && item.path)
+    .map(item => item.path);
+
+  playbackProgressByPath.clear();
+  if (!paths.length) return;
+
+  try {
+    const payload = await nativeGetPlaybackProgress(paths);
+    Object.entries(payload || {}).forEach(([path, entry]) => {
+      playbackProgressByPath.set(path, entry);
+    });
+  } catch (_) {
+    playbackProgressByPath.clear();
+  }
+}
+
+window.__refreshPlaybackProgress = function() {
+  if (currentPage !== 'library') return;
+  refreshLibraryPlaybackProgress(libraryState.items).then(() => {
+    renderLibrary();
+  }).catch(() => {});
+};
 
 function handleLibraryEnter() {
   const item = (libraryState.visibleItems || [])[nav.libraryIndex];
@@ -703,6 +816,35 @@ function handleSettingsEnter() {
       .finally(() => {
         btn.disabled = false;
       });
+    return;
+  }
+
+  if (action === 'clear-history' || action === 'settings-history') {
+    const btn = document.getElementById('settings-history-btn');
+    if (!btn || btn.disabled) return;
+    btn.textContent = 'Clearing...';
+    btn.disabled = true;
+    nativeClearPlaybackHistory()
+      .then((summary) => {
+        playbackProgressByPath.clear();
+        if (currentPage === 'library') {
+          renderLibrary();
+        }
+        updatePlaybackHistorySummary(summary);
+        btn.textContent = 'Cleared';
+        setTimeout(() => {
+          btn.textContent = 'Clear History';
+        }, 1200);
+      })
+      .catch(() => {
+        btn.textContent = 'Clear Failed';
+        setTimeout(() => {
+          btn.textContent = 'Clear History';
+        }, 1200);
+      })
+      .finally(() => {
+        btn.disabled = false;
+      });
   }
 }
 
@@ -724,6 +866,48 @@ async function updateTunnelUrlLabel(forceRefresh = false) {
     if (!cached) {
       el.textContent = 'Unavailable';
     }
+  }
+}
+
+function formatHistorySummary(summary) {
+  if (!summary || !summary.hasHistory || !summary.count) {
+    return 'No playback history yet';
+  }
+
+  const lastUpdated = summary.lastUpdatedAt
+    ? new Date(summary.lastUpdatedAt).toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    : 'Unknown';
+
+  const itemLabel = summary.count === 1 ? 'item' : 'items';
+  return `${summary.count} ${itemLabel} • Last updated ${lastUpdated}`;
+}
+
+function applyPlaybackHistorySummary(summary) {
+  const desc = document.getElementById('settings-history-desc');
+  const btn = document.getElementById('settings-history-btn');
+  if (desc) {
+    desc.textContent = formatHistorySummary(summary);
+  }
+  if (btn) {
+    btn.disabled = !summary || !summary.hasHistory || !summary.count;
+  }
+}
+
+async function updatePlaybackHistorySummary(prefetchedSummary = null) {
+  const desc = document.getElementById('settings-history-desc');
+  if (desc && !prefetchedSummary) {
+    desc.textContent = 'Checking playback history...';
+  }
+  try {
+    const summary = prefetchedSummary || await nativeGetPlaybackHistorySummary();
+    applyPlaybackHistorySummary(summary);
+  } catch (_) {
+    applyPlaybackHistorySummary({ count: 0, lastUpdatedAt: 0, hasHistory: false });
   }
 }
 
@@ -838,7 +1022,10 @@ function switchPage(page) {
     cancelLibraryRetry();
   }
   if (page === 'library') ensureLibraryLoaded();
-  if (page === 'settings') updateTunnelUrlLabel(false);
+  if (page === 'settings') {
+    updateTunnelUrlLabel(false);
+    updatePlaybackHistorySummary();
+  }
 }
 
 // ── Spatial Navigation ──

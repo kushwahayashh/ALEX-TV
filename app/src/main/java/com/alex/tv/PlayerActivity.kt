@@ -14,6 +14,8 @@ class PlayerActivity : ComponentActivity() {
 
         val streamUrl = intent.getStringExtra(EXTRA_STREAM_URL).orEmpty()
         val title = intent.getStringExtra(EXTRA_TITLE).orEmpty()
+        val mediaPath = intent.getStringExtra(EXTRA_MEDIA_PATH).orEmpty()
+        val resumePositionMs = PlaybackProgressStore.getResumePositionMs(this, mediaPath)
         if (streamUrl.isBlank()) {
             finish()
             return
@@ -23,7 +25,9 @@ class PlayerActivity : ComponentActivity() {
             VibeTheme {
                 PlayerScreen(
                     streamUrl = streamUrl,
+                    mediaPath = mediaPath,
                     title = title,
+                    initialResumePositionMs = resumePositionMs,
                     onClose = { finish() }
                 )
             }
@@ -33,5 +37,6 @@ class PlayerActivity : ComponentActivity() {
     companion object {
         const val EXTRA_STREAM_URL = "stream_url"
         const val EXTRA_TITLE = "title"
+        const val EXTRA_MEDIA_PATH = "media_path"
     }
 }

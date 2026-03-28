@@ -23,6 +23,7 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
@@ -126,6 +127,12 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         webView.onResume()
         webView.resumeTimers()
+        webView.post {
+            webView.evaluateJavascript(
+                "window.__refreshPlaybackProgress && window.__refreshPlaybackProgress()",
+                null
+            )
+        }
     }
 
     override fun onDestroy() {
@@ -197,13 +204,59 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
-        fun play(url: String, title: String) {
+        fun play(url: String, title: String, mediaPath: String) {
             if (url.isBlank()) return
             runOnUiThread {
                 val intent = Intent(this@MainActivity, PlayerActivity::class.java)
                 intent.putExtra(PlayerActivity.EXTRA_STREAM_URL, url)
                 intent.putExtra(PlayerActivity.EXTRA_TITLE, title)
+                intent.putExtra(PlayerActivity.EXTRA_MEDIA_PATH, mediaPath)
                 startActivity(intent)
+            }
+        }
+
+        @JavascriptInterface
+        fun getPlaybackProgress(pathsJson: String, callbackId: String) {
+            bridgeExecutor.execute {
+                val payload = try {
+                    val normalized = JSONArray(pathsJson).toString()
+                    PlaybackProgressStore.getProgressPayload(this@MainActivity, normalized)
+                } catch (_: Exception) {
+                    PlaybackProgressStore.getProgressPayload(this@MainActivity, "[]")
+                }
+                val js = "window.__nativePlaybackProgressResolve(" +
+                    "${JSONObject.quote(callbackId)}, true, ${JSONObject.quote(payload)}" +
+                    ");"
+                webView.post {
+                    webView.evaluateJavascript(js, null)
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun getPlaybackHistorySummary(callbackId: String) {
+            bridgeExecutor.execute {
+                val payload = PlaybackProgressStore.getHistorySummaryPayload(this@MainActivity)
+                val js = "window.__nativePlaybackHistoryResolve(" +
+                    "${JSONObject.quote(callbackId)}, true, ${JSONObject.quote(payload)}" +
+                    ");"
+                webView.post {
+                    webView.evaluateJavascript(js, null)
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun clearPlaybackHistory(callbackId: String) {
+            bridgeExecutor.execute {
+                PlaybackProgressStore.clearAll(this@MainActivity)
+                val payload = PlaybackProgressStore.getHistorySummaryPayload(this@MainActivity)
+                val js = "window.__nativePlaybackHistoryResolve(" +
+                    "${JSONObject.quote(callbackId)}, true, ${JSONObject.quote(payload)}" +
+                    ");"
+                webView.post {
+                    webView.evaluateJavascript(js, null)
+                }
             }
         }
 

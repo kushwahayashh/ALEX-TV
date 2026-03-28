@@ -64,6 +64,7 @@ import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.core.content.res.ResourcesCompat
+import com.alex.tv.PlaybackProgressStore
 import com.alex.tv.R
 import com.alex.tv.ui.theme.*
 import kotlinx.coroutines.Job
@@ -75,7 +76,9 @@ import kotlin.math.roundToLong
 @Composable
 fun PlayerScreen(
     streamUrl: String,
+    mediaPath: String,
     title: String,
+    initialResumePositionMs: Long,
     onClose: () -> Unit
 ) {
     val context = LocalContext.current
@@ -112,6 +115,9 @@ fun PlayerScreen(
     var playbackError by remember { mutableStateOf<String?>(null) }
     var retryCount by remember { mutableIntStateOf(0) }
     var retryToken by remember { mutableLongStateOf(0L) }
+    var pendingInitialSeekMs by remember(streamUrl, mediaPath) {
+        mutableLongStateOf(initialResumePositionMs.coerceAtLeast(0L))
+    }
     var pendingAudioFallbackParams by remember { mutableStateOf<DefaultTrackSelector.Parameters?>(null) }
     var pendingAudioFallbackLabel by remember { mutableStateOf<String?>(null) }
     var showCaptionMenu by remember { mutableStateOf(false) }
@@ -127,6 +133,17 @@ fun PlayerScreen(
     val audioFocusRequester = remember { FocusRequester() }
     val screenFocusRequester = remember { FocusRequester() }
     var resumeOnStart by remember { mutableStateOf(false) }
+
+    fun persistPlaybackProgress() {
+        if (mediaPath.isBlank()) return
+        PlaybackProgressStore.saveProgress(
+            context = context,
+            mediaPath = mediaPath,
+            title = title,
+            positionMs = exoPlayer.currentPosition,
+            durationMs = exoPlayer.duration.takeIf { it > 0L && it != C.TIME_UNSET } ?: 0L
+        )
+    }
 
     BackHandler(enabled = isMenuOpen) {
         showCaptionMenu = false
@@ -183,13 +200,27 @@ fun PlayerScreen(
                     playbackError = null
                 }
                 if (state == Player.STATE_READY) {
+                    if (pendingInitialSeekMs > 0L) {
+                        val rawDuration = exoPlayer.duration
+                        val seekTarget = if (rawDuration > 0L && rawDuration != C.TIME_UNSET) {
+                            pendingInitialSeekMs.coerceIn(0L, rawDuration)
+                        } else {
+                            pendingInitialSeekMs
+                        }
+                        exoPlayer.seekTo(seekTarget)
+                        pendingInitialSeekMs = 0L
+                    }
                     pendingAudioFallbackParams = null
                     pendingAudioFallbackLabel = null
+                }
+                if (state == Player.STATE_ENDED) {
+                    PlaybackProgressStore.clearProgress(context, mediaPath)
                 }
             }
         }
         exoPlayer.addListener(listener)
         onDispose {
+            persistPlaybackProgress()
             exoPlayer.removeListener(listener)
             exoPlayer.stop()
             exoPlayer.release()
@@ -201,6 +232,7 @@ fun PlayerScreen(
             when (event) {
                 Lifecycle.Event.ON_PAUSE,
                 Lifecycle.Event.ON_STOP -> {
+                    persistPlaybackProgress()
                     resumeOnStart = exoPlayer.isPlaying
                     exoPlayer.pause()
                 }
@@ -237,6 +269,7 @@ fun PlayerScreen(
         resetTrackOverrides(trackSelector)
         retryCount = 0
         retryToken = 0L
+        pendingInitialSeekMs = initialResumePositionMs.coerceAtLeast(0L)
         pendingAudioFallbackParams = null
         pendingAudioFallbackLabel = null
         showCaptionMenu = false
@@ -260,6 +293,14 @@ fun PlayerScreen(
     LaunchedEffect(showControls, isMenuOpen) {
         if (showControls && !isMenuOpen) {
             playPauseFocusRequester.requestFocus() // Return focus to controls when shown
+        }
+    }
+
+    LaunchedEffect(exoPlayer, mediaPath, title) {
+        if (mediaPath.isBlank()) return@LaunchedEffect
+        while (isActive) {
+            delay(5_000)
+            persistPlaybackProgress()
         }
     }
 
