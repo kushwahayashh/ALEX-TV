@@ -870,7 +870,7 @@ fun PlayerSeekBar(
                         didSeekDuringHold = false
                         previewPositionMs = if (hadActiveSeek) previewPositionMs else positionMs
                         seekJob = scope.launch {
-                            delay(120)
+                            delay(70)
                             var lastFrameNanos = withFrameNanos { it }
                             while (isActive) {
                                 val frameNanos = withFrameNanos { it }
@@ -878,9 +878,10 @@ fun PlayerSeekBar(
                                 lastFrameNanos = frameNanos
                                 val heldMs = ((frameNanos - seekStartNanos) / 1_000_000f).coerceAtLeast(0f)
                                 val velocityPerSecond = when {
-                                    heldMs < 500f -> 45_000f
-                                    heldMs < 1400f -> 110_000f
-                                    else -> 220_000f
+                                    heldMs < 350f -> 90_000f
+                                    heldMs < 1100f -> 240_000f
+                                    heldMs < 2200f -> 480_000f
+                                    else -> 900_000f
                                 }
                                 val delta = (velocityPerSecond * deltaMs / 1000f) * seekDirection
                                 val next = (previewPositionMs + delta).roundToLong()
