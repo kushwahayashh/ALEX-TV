@@ -309,7 +309,10 @@ body {
 
 #hero-backdrop {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  width: 70%;
+  height: 100%;
   background-size: cover;
   background-position: center 20%;
 }
@@ -324,12 +327,19 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(1100px 520px at 18% 38%, rgba(255,255,255,0.08), transparent 60%),
+    linear-gradient(
+      90deg,
+      var(--bg) 0%,
+      var(--bg) 28%,
+      rgba(0,0,0,0.85) 38%,
+      rgba(0,0,0,0.4) 55%,
+      transparent 75%
+    ),
     linear-gradient(
       180deg,
       rgba(0,0,0,0.05) 0%,
-      rgba(0,0,0,0.65) 42%,
-      rgba(0,0,0,0.92) 72%,
+      rgba(0,0,0,0.55) 50%,
+      rgba(0,0,0,0.92) 75%,
       var(--bg) 100%
     );
 }
