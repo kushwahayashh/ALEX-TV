@@ -1007,15 +1007,17 @@ fun PlayerSeekBar(
                             .background(ProgressFill)
                     )
                 }
-                val maxOffset = (maxWidth - dotSize).coerceAtLeast(0.dp)
-                val dotOffset = (maxWidth * animatedProgress - dotSize / 2).coerceIn(0.dp, maxOffset)
-                Box(
-                    modifier = Modifier
-                        .offset(x = dotOffset)
-                        .size(dotSize)
-                        .clip(CircleShape)
-                        .background(Color.White)
-                )
+                if (isProgressFocused) {
+                    val maxOffset = (maxWidth - dotSize).coerceAtLeast(0.dp)
+                    val dotOffset = (maxWidth * animatedProgress - dotSize / 2).coerceIn(0.dp, maxOffset)
+                    Box(
+                        modifier = Modifier
+                            .offset(x = dotOffset)
+                            .size(dotSize)
+                            .clip(CircleShape)
+                            .background(Color.White)
+                    )
+                }
             }
         }
     }
