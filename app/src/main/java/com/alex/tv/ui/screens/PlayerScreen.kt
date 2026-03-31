@@ -192,6 +192,11 @@ fun PlayerScreen(
                         delay(800L * retryCount)
                         retryToken = System.currentTimeMillis()
                     }
+                } else {
+                    scope.launch {
+                        delay(1500)
+                        onClose()
+                    }
                 }
             }
 
@@ -668,9 +673,9 @@ private fun BoxScope.PlayerBottomControls(
     }
 
     LaunchedEffect(controlsVisible) {
+        syncPlayerTimelineState()
         if (!controlsVisible) {
             isScrubbing = false
-            syncPlayerTimelineState()
         }
     }
 

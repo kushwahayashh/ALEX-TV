@@ -42,6 +42,9 @@ let lastRowScrollIndex = null;
 const tmdbCacheMemory = new Map();
 const playbackProgressByPath = new Map();
 let backendRoot = null;
+let _ensureBackendPromise = null;
+let _lastBackendActivity = 0;
+const BACKEND_IDLE_TIMEOUT = 600 * 1000; // matches server IDLE_TIMEOUT_SECONDS
 
 class SmoothScroller {
   constructor() {
@@ -278,11 +281,20 @@ function readCachedBackendRoot() {
 
 function writeCachedBackendRoot(url) {
   backendRoot = url;
+  _lastBackendActivity = Date.now();
   try {
     localStorage.setItem(BACKEND_CACHE_KEY, url);
   } catch (err) {
     // Ignore cache write failures
   }
+}
+
+function touchBackendActivity() {
+  _lastBackendActivity = Date.now();
+}
+
+function isBackendLikelyExpired() {
+  return _lastBackendActivity > 0 && (Date.now() - _lastBackendActivity) > BACKEND_IDLE_TIMEOUT;
 }
 
 async function isBackendAlive(url) {
@@ -294,19 +306,34 @@ async function isBackendAlive(url) {
   }
 }
 
-async function ensureBackendReady(forceRefresh = false) {
-  if (!forceRefresh) {
+function invalidateBackendCache() {
+  backendRoot = null;
+  try { localStorage.removeItem(BACKEND_CACHE_KEY); } catch (_) {}
+}
+
+async function _doEnsureBackendReady(forceRefresh) {
+  if (!forceRefresh && !isBackendLikelyExpired()) {
     const cached = readCachedBackendRoot();
     if (cached && (await isBackendAlive(cached))) {
+      touchBackendActivity();
       backendRoot = cached;
       return backendRoot;
     }
   }
 
+  invalidateBackendCache();
   const data = await fetchJson(START_TUNNEL_URL);
   if (!data || !data.url) throw new Error('Backend unavailable');
   writeCachedBackendRoot(data.url);
   return data.url;
+}
+
+async function ensureBackendReady(forceRefresh = false) {
+  if (_ensureBackendPromise && !forceRefresh) return _ensureBackendPromise;
+  _ensureBackendPromise = _doEnsureBackendReady(forceRefresh).finally(() => {
+    _ensureBackendPromise = null;
+  });
+  return _ensureBackendPromise;
 }
 
 function getTmdbCacheTtl(path) {
@@ -610,11 +637,12 @@ async function loadLibrary(path, didRetry = false) {
   if (libraryState.loading) return;
   cancelLibraryRetry();
   libraryState.loading = true;
-  setLibraryStatus('Loading library...');
+  setLibraryStatus(isBackendLikelyExpired() ? 'Reconnecting...' : 'Loading library...');
   try {
     const root = await ensureBackendReady(false);
     const listUrl = `${root.replace(/\/+$/, '')}/list?path=${encodeURIComponent(path)}`;
     const data = await fetchJson(listUrl);
+    touchBackendActivity();
     libraryState.path = data.path || path;
     libraryState.items = Array.isArray(data.items) ? data.items : [];
     libraryState.visibleItems = [];
