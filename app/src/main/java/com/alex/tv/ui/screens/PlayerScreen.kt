@@ -93,7 +93,13 @@ fun PlayerScreen(
     }
     val exoPlayer = remember {
         val loadControl = DefaultLoadControl.Builder()
-            .setBackBuffer(20_000, false)
+            .setBufferDurationsMs(
+                50_000,   // minBufferMs – buffer at least 50s ahead
+                120_000,  // maxBufferMs – allow up to 2 min buffer
+                2_500,    // playbackStart – start after 2.5s buffered
+                5_000     // rebuffer – resume after 5s buffered
+            )
+            .setBackBuffer(30_000, false)
             .build()
         ExoPlayer.Builder(context)
             .setLoadControl(loadControl)
@@ -186,10 +192,10 @@ fun PlayerScreen(
                     return
                 }
                 playbackError = error.message ?: "Playback error"
-                if (retryCount < 2) {
+                if (retryCount < 5) {
                     retryCount += 1
                     scope.launch {
-                        delay(800L * retryCount)
+                        delay(1000L * retryCount)
                         retryToken = System.currentTimeMillis()
                     }
                 } else {

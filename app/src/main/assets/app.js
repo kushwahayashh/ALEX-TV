@@ -330,9 +330,16 @@ async function _doEnsureBackendReady(forceRefresh) {
 
 async function ensureBackendReady(forceRefresh = false) {
   if (_ensureBackendPromise && !forceRefresh) return _ensureBackendPromise;
-  _ensureBackendPromise = _doEnsureBackendReady(forceRefresh).finally(() => {
-    _ensureBackendPromise = null;
-  });
+  _ensureBackendPromise = _doEnsureBackendReady(forceRefresh)
+    .catch((err) => {
+      _ensureBackendPromise = null;
+      invalidateBackendCache();
+      throw err;
+    })
+    .then((url) => {
+      _ensureBackendPromise = null;
+      return url;
+    });
   return _ensureBackendPromise;
 }
 
