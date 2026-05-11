@@ -42,6 +42,8 @@ class MainActivity : AppCompatActivity() {
     private var lastNavKeyCode: Int = KeyEvent.KEYCODE_UNKNOWN
     private var lastNavKeyAtMs: Long = 0L
 
+    private var downloadReceiverRegistered = false
+
     private val onDownloadComplete = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
@@ -72,6 +74,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             registerReceiver(onDownloadComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
         }
+        downloadReceiverRegistered = true
 
         // Fullscreen immersive
         supportActionBar?.hide()
@@ -139,7 +142,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        unregisterReceiver(onDownloadComplete)
+        if (downloadReceiverRegistered) {
+            unregisterReceiver(onDownloadComplete)
+        }
         webView.destroy()
         super.onDestroy()
     }

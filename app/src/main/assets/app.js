@@ -1345,12 +1345,12 @@ function processNavKey(key) {
         } else if (currentPage === 'library') {
           nav.area = 'library';
           nav.libraryIndex = 0;
-      } else if (currentPage === 'settings') {
-        nav.area = 'settings';
-        nav.settingsIndex = 0;
-        focusCurrent();
-        return;
-      }
+        } else if (currentPage === 'settings') {
+          nav.area = 'settings';
+          nav.settingsIndex = 0;
+          focusCurrent();
+          return;
+        }
       } else if (nav.area < totalContentRows() - 1) {
         nav.area++;
         nav.col = nav.cols[nav.area] ?? nav.col;
