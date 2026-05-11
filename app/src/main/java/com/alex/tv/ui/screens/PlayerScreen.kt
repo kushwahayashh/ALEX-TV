@@ -139,6 +139,7 @@ fun PlayerScreen(
     val audioFocusRequester = remember { FocusRequester() }
     val screenFocusRequester = remember { FocusRequester() }
     var resumeOnStart by remember { mutableStateOf(false) }
+    var wasPausedAtMs by remember { mutableLongStateOf(-1L) }
 
     fun persistPlaybackProgress() {
         if (mediaPath.isBlank()) return
@@ -164,6 +165,15 @@ fun PlayerScreen(
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlayingState: Boolean) {
                 isPlaying = isPlayingState
+                if (!isPlayingState) {
+                    // Record position when paused so we can resync A/V on resume
+                    wasPausedAtMs = exoPlayer.currentPosition
+                } else if (wasPausedAtMs >= 0L) {
+                    // Resync: seek back to the exact pause position to flush decoder buffers
+                    // and realign audio+video clocks after tunneling pause
+                    exoPlayer.seekTo(wasPausedAtMs)
+                    wasPausedAtMs = -1L
+                }
             }
 
             override fun onPlayerError(error: PlaybackException) {
