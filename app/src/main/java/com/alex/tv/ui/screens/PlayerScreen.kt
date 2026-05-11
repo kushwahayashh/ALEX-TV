@@ -141,6 +141,21 @@ fun PlayerScreen(
     var resumeOnStart by remember { mutableStateOf(false) }
     var wasPausedAtMs by remember { mutableLongStateOf(-1L) }
 
+    fun playerPause() {
+        wasPausedAtMs = exoPlayer.currentPosition
+        exoPlayer.pause()
+    }
+
+    fun playerPlay() {
+        if (wasPausedAtMs >= 0L) {
+            // Resync: seek back to the exact pause position to flush decoder buffers
+            // and realign audio+video clocks after tunneling pause
+            exoPlayer.seekTo(wasPausedAtMs)
+            wasPausedAtMs = -1L
+        }
+        exoPlayer.play()
+    }
+
     fun persistPlaybackProgress() {
         if (mediaPath.isBlank()) return
         PlaybackProgressStore.saveProgress(
@@ -165,15 +180,6 @@ fun PlayerScreen(
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlayingState: Boolean) {
                 isPlaying = isPlayingState
-                if (!isPlayingState) {
-                    // Record position when paused so we can resync A/V on resume
-                    wasPausedAtMs = exoPlayer.currentPosition
-                } else if (wasPausedAtMs >= 0L) {
-                    // Resync: seek back to the exact pause position to flush decoder buffers
-                    // and realign audio+video clocks after tunneling pause
-                    exoPlayer.seekTo(wasPausedAtMs)
-                    wasPausedAtMs = -1L
-                }
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -217,10 +223,11 @@ fun PlayerScreen(
             }
 
             override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_READY && playbackError != null) {
-                    playbackError = null
-                }
                 if (state == Player.STATE_READY) {
+                    wasPausedAtMs = -1L
+                    if (playbackError != null) {
+                        playbackError = null
+                    }
                     if (pendingInitialSeekMs > 0L) {
                         val rawDuration = exoPlayer.duration
                         val seekTarget = if (rawDuration > 0L && rawDuration != C.TIME_UNSET) {
@@ -373,7 +380,7 @@ fun PlayerScreen(
                                 showControls = true
                             }
                             if (playbackError == null) {
-                                if (isPlaying) exoPlayer.pause() else exoPlayer.play()
+                                if (isPlaying) playerPause() else playerPlay()
                             }
                             true
                         }
@@ -479,7 +486,7 @@ fun PlayerScreen(
             onInteraction = { lastInteraction = System.currentTimeMillis() },
             onTogglePlayPause = {
                 lastInteraction = System.currentTimeMillis()
-                if (isPlaying) exoPlayer.pause() else exoPlayer.play()
+                if (isPlaying) playerPause() else playerPlay()
             },
             onSeekBy = { offsetMs ->
                 lastInteraction = System.currentTimeMillis()
