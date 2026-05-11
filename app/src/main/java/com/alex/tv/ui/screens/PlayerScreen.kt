@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -118,6 +119,7 @@ fun PlayerScreen(
     var isPlaying by remember { mutableStateOf(true) }
     var showControls by remember { mutableStateOf(true) }
     var lastInteraction by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var isBuffering by remember { mutableStateOf(true) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var retryCount by remember { mutableIntStateOf(0) }
     var retryToken by remember { mutableLongStateOf(0L) }
@@ -223,26 +225,36 @@ fun PlayerScreen(
             }
 
             override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_READY) {
-                    wasPausedAtMs = -1L
-                    if (playbackError != null) {
-                        playbackError = null
+                when (state) {
+                    Player.STATE_BUFFERING -> {
+                        isBuffering = true
                     }
-                    if (pendingInitialSeekMs > 0L) {
-                        val rawDuration = exoPlayer.duration
-                        val seekTarget = if (rawDuration > 0L && rawDuration != C.TIME_UNSET) {
-                            pendingInitialSeekMs.coerceIn(0L, rawDuration)
-                        } else {
-                            pendingInitialSeekMs
+                    Player.STATE_READY -> {
+                        isBuffering = false
+                        wasPausedAtMs = -1L
+                        if (playbackError != null) {
+                            playbackError = null
                         }
-                        exoPlayer.seekTo(seekTarget)
-                        pendingInitialSeekMs = 0L
+                        if (pendingInitialSeekMs > 0L) {
+                            val rawDuration = exoPlayer.duration
+                            val seekTarget = if (rawDuration > 0L && rawDuration != C.TIME_UNSET) {
+                                pendingInitialSeekMs.coerceIn(0L, rawDuration)
+                            } else {
+                                pendingInitialSeekMs
+                            }
+                            exoPlayer.seekTo(seekTarget)
+                            pendingInitialSeekMs = 0L
+                        }
+                        pendingAudioFallbackParams = null
+                        pendingAudioFallbackLabel = null
                     }
-                    pendingAudioFallbackParams = null
-                    pendingAudioFallbackLabel = null
-                }
-                if (state == Player.STATE_ENDED) {
-                    PlaybackProgressStore.clearProgress(context, mediaPath)
+                    Player.STATE_ENDED -> {
+                        isBuffering = false
+                        PlaybackProgressStore.clearProgress(context, mediaPath)
+                    }
+                    Player.STATE_IDLE -> {
+                        isBuffering = true
+                    }
                 }
             }
         }
@@ -474,6 +486,20 @@ fun PlayerScreen(
                         fontFamily = DmSans
                     )
                 }
+            }
+        }
+
+        if (isBuffering && playbackError == null && !showControls) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    color = Color.White,
+                    strokeWidth = 3.dp
+                )
             }
         }
 
