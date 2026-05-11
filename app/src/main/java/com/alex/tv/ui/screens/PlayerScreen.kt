@@ -87,7 +87,7 @@ fun PlayerScreen(
     val trackSelector = remember {
         DefaultTrackSelector(context).apply {
             parameters = buildUponParameters()
-                .setTunnelingEnabled(false)
+                .setTunnelingEnabled(true)
                 .build()
         }
     }
