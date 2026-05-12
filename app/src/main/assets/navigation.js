@@ -234,9 +234,9 @@ function handleKey(e) {
   // Adaptive throttle: faster single taps, slower holds to let scroll keep up
   let throttle;
   if (e.repeat) {
-    throttle = 160;
+    throttle = 80;
   } else {
-    throttle = 30;
+    throttle = 16;
   }
   
   if (now - navLastTime < throttle) return;

@@ -210,9 +210,9 @@ class MainActivity : AppCompatActivity() {
 
         val now = SystemClock.uptimeMillis()
         val sinceLast = now - lastNavKeyAtMs
-        val sameDirectionBurst = keyCode == lastNavKeyCode && sinceLast < 220L
+        val sameDirectionBurst = keyCode == lastNavKeyCode && sinceLast < 120L
         val isRepeat = event.repeatCount > 0 || sameDirectionBurst
-        val throttleMs = if (isRepeat) 160L else 30L
+        val throttleMs = if (isRepeat) 80L else 16L
         val shouldThrottle = now - lastNavKeyAtMs < throttleMs
 
         if (!shouldThrottle) {
