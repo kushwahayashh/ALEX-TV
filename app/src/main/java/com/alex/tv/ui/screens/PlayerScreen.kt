@@ -590,14 +590,15 @@ private fun BoxScope.PlayerControlsOverlay(
     val bottomScrimColors = remember {
         listOf(
             Color.Transparent,
-            Color(0x06000000),
-            Color(0x16000000),
-            Color(0x52000000)
+            Color(0x1A000000),
+            Color(0x66000000),
+            Color(0xB3000000),
+            Color(0xD9000000)
         )
     }
     val topScrimColors = remember {
         listOf(
-            Color(0x42000000),
+            Color(0xB3000000),
             Color.Transparent
         )
     }
@@ -608,7 +609,7 @@ private fun BoxScope.PlayerControlsOverlay(
         modifier = Modifier
             .align(Alignment.BottomStart)
             .fillMaxWidth()
-            .height(192.dp)
+            .height(240.dp)
             .alpha(controlsAlpha)
             .playerVerticalScrim(bottomScrimColors)
     )
@@ -688,25 +689,8 @@ private fun BoxScope.PlayerBottomControls(
         durationMs = if (rawDuration > 0 && rawDuration != C.TIME_UNSET) rawDuration else 0L
     }
 
-    DisposableEffect(exoPlayer) {
+    LaunchedEffect(exoPlayer) {
         syncPlayerTimelineState()
-        val listener = object : Player.Listener {
-            override fun onEvents(player: Player, events: Player.Events) {
-                if (
-                    events.contains(Player.EVENT_POSITION_DISCONTINUITY) ||
-                    events.contains(Player.EVENT_TIMELINE_CHANGED) ||
-                    events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION) ||
-                    events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED) ||
-                    events.contains(Player.EVENT_IS_PLAYING_CHANGED)
-                ) {
-                    syncPlayerTimelineState()
-                }
-            }
-        }
-        exoPlayer.addListener(listener)
-        onDispose {
-            exoPlayer.removeListener(listener)
-        }
     }
 
     LaunchedEffect(exoPlayer, controlsVisible, isScrubbing) {
@@ -926,16 +910,8 @@ fun PlayerSeekBar(
 
     val progress = if (isDurationKnown) previewPositionMs.toFloat() / durationMs.toFloat() else 0f
     val bufferedProgress = if (isDurationKnown) bufferedPositionMs.toFloat() / durationMs.toFloat() else 0f
-    val animatedProgress by animateFloatAsState(
-        targetValue = progress.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 90, easing = LinearEasing),
-        label = "seekbar_progress"
-    )
-    val animatedBufferedProgress by animateFloatAsState(
-        targetValue = bufferedProgress.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 140, easing = LinearEasing),
-        label = "seekbar_buffered_progress"
-    )
+    val animatedProgress = progress.coerceIn(0f, 1f)
+    val animatedBufferedProgress = bufferedProgress.coerceIn(0f, 1f)
     val containerHeight = 16.dp
 
     Column(
@@ -977,6 +953,7 @@ fun PlayerSeekBar(
                         seekJob = scope.launch {
                             delay(70)
                             var lastFrameNanos = withFrameNanos { it }
+                            var frameCount = 0
                             while (isActive) {
                                 val frameNanos = withFrameNanos { it }
                                 val deltaMs = ((frameNanos - lastFrameNanos) / 1_000_000f).coerceIn(8f, 40f)
@@ -994,8 +971,12 @@ fun PlayerSeekBar(
                                 if (next != previewPositionMs) {
                                     previewPositionMs = next
                                     didSeekDuringHold = true
-                                    onSeekPreview(next)
-                                    onInteraction()
+                                    // Throttle preview updates to every other frame to reduce recompositions
+                                    frameCount++
+                                    if (frameCount % 2 == 0) {
+                                        onSeekPreview(next)
+                                        onInteraction()
+                                    }
                                 }
                             }
                         }
