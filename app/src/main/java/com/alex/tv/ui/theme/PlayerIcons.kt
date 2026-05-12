@@ -226,8 +226,6 @@ object PlayerIcons {
             viewportHeight = 24f
         ).path(fill = SolidColor(Color.White)) {
             moveTo(8.707f, 2.293f)
-            lineToRelative(3.293f, 5.585f) // wait, correcting based on path
-            moveTo(8.707f, 2.293f)
             lineToRelative(3.293f, 3.292f)
             lineToRelative(3.293f, -3.292f)
             arcToRelative(1f, 1f, 0f, isMoreThanHalf = false, isPositiveArc = true, 1.32f, -0.083f)
