@@ -707,12 +707,6 @@ private fun BoxScope.PlayerBottomControls(
                     scrubPositionMs = currentPositionMs
                 }
             },
-            onSeekPreview = { previewPosition ->
-                if (!isScrubbing) {
-                    isScrubbing = true
-                }
-                scrubPositionMs = previewPosition
-            },
             onSeekCommit = { finalPosition ->
                 scrubPositionMs = finalPosition
                 currentPositionMs = finalPosition
@@ -831,7 +825,6 @@ fun PlayerSeekBar(
     focusRequester: FocusRequester,
     downRequester: FocusRequester,
     onSeekStart: () -> Unit,
-    onSeekPreview: (Long) -> Unit,
     onSeekCommit: (Long) -> Unit
 ) {
     var isProgressFocused by remember { mutableStateOf(false) }
@@ -921,6 +914,7 @@ fun PlayerSeekBar(
                         delay(70)
                         var lastFrameNanos = withFrameNanos { it }
                         var frameCount = 0
+                        var lastInteractionTime = 0L
                         while (isActive) {
                             val frameNanos = withFrameNanos { it }
                             val deltaMs = ((frameNanos - lastFrameNanos) / 1_000_000f).coerceIn(8f, 40f)
@@ -936,12 +930,15 @@ fun PlayerSeekBar(
                             val next = (previewPositionMs + delta).roundToLong()
                                 .coerceIn(0L, durationMs)
                             if (next != previewPositionMs) {
-                                previewPositionMs = next
                                 didSeekDuringHold = true
                                 frameCount++
                                 if (frameCount % 2 == 0) {
-                                    onSeekPreview(next)
-                                    onInteraction()
+                                    previewPositionMs = next
+                                    val now = System.currentTimeMillis()
+                                    if (now - lastInteractionTime > 500) {
+                                        onInteraction()
+                                        lastInteractionTime = now
+                                    }
                                 }
                             }
                         }
