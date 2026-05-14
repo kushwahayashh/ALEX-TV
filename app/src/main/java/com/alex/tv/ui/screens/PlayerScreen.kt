@@ -12,6 +12,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -126,8 +127,6 @@ fun PlayerScreen(
     var pendingInitialSeekMs by remember(streamUrl, mediaPath) {
         mutableLongStateOf(initialResumePositionMs.coerceAtLeast(0L))
     }
-    var pendingAudioFallbackParams by remember { mutableStateOf<DefaultTrackSelector.Parameters?>(null) }
-    var pendingAudioFallbackLabel by remember { mutableStateOf<String?>(null) }
     var showCaptionMenu by remember { mutableStateOf(false) }
     var showAudioMenu by remember { mutableStateOf(false) }
     val isMenuOpen = showCaptionMenu || showAudioMenu
@@ -185,30 +184,6 @@ fun PlayerScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
-                val isAudioDecodeError = when (error.errorCode) {
-                    PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
-                    PlaybackException.ERROR_CODE_DECODING_FAILED,
-                    PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
-                    PlaybackException.ERROR_CODE_AUDIO_TRACK_WRITE_FAILED -> true
-                    else -> false
-                }
-                val fallbackParams = pendingAudioFallbackParams
-                if (isAudioDecodeError && fallbackParams != null) {
-                    trackSelector.parameters = fallbackParams
-                    pendingAudioFallbackParams = null
-                    val label = pendingAudioFallbackLabel
-                    pendingAudioFallbackLabel = null
-                    playbackError = if (!label.isNullOrBlank()) {
-                        "Audio track \"$label\" isn't supported on this device. Reverted to previous."
-                    } else {
-                        "Selected audio track isn't supported on this device. Reverted to previous."
-                    }
-                    val shouldResume = exoPlayer.playWhenReady
-                    exoPlayer.prepare()
-                    exoPlayer.playWhenReady = shouldResume
-                    retryCount = 0
-                    return
-                }
                 playbackError = error.message ?: "Playback error"
                 if (retryCount < 5) {
                     retryCount += 1
@@ -245,8 +220,6 @@ fun PlayerScreen(
                             exoPlayer.seekTo(seekTarget)
                             pendingInitialSeekMs = 0L
                         }
-                        pendingAudioFallbackParams = null
-                        pendingAudioFallbackLabel = null
                     }
                     Player.STATE_ENDED -> {
                         isBuffering = false
@@ -310,8 +283,6 @@ fun PlayerScreen(
         retryCount = 0
         retryToken = 0L
         pendingInitialSeekMs = initialResumePositionMs.coerceAtLeast(0L)
-        pendingAudioFallbackParams = null
-        pendingAudioFallbackLabel = null
         showCaptionMenu = false
         showAudioMenu = false
     }
@@ -549,10 +520,6 @@ fun PlayerScreen(
                 exoPlayer = exoPlayer,
                 trackSelector = trackSelector,
                 trackType = menuType,
-                onAudioSelectionAttempt = { previousParams, option ->
-                    pendingAudioFallbackParams = previousParams
-                    pendingAudioFallbackLabel = option.label
-                },
                 onDismiss = {
                     showCaptionMenu = false
                     showAudioMenu = false
@@ -914,141 +881,141 @@ fun PlayerSeekBar(
     val animatedBufferedProgress = bufferedProgress.coerceIn(0f, 1f)
     val containerHeight = 16.dp
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .focusRequester(focusRequester)
-            .focusProperties { down = downRequester }
-            .onFocusChanged {
-                if (isProgressFocused != it.isFocused) {
-                    isProgressFocused = it.isFocused
-                }
-                if (!it.isFocused) {
-                    cancelActiveSeek(resetPreview = true)
-                }
-                if (it.isFocused) onInteraction()
+    val canvasModifier = Modifier
+        .fillMaxWidth()
+        .height(containerHeight)
+        .focusRequester(focusRequester)
+        .focusProperties { down = downRequester }
+        .onFocusChanged {
+            if (isProgressFocused != it.isFocused) {
+                isProgressFocused = it.isFocused
             }
-            .onKeyEvent { keyEvent ->
-                onInteraction()
+            if (!it.isFocused) {
+                cancelActiveSeek(resetPreview = true)
+            }
+            if (it.isFocused) onInteraction()
+        }
+        .onKeyEvent { keyEvent ->
+            onInteraction()
 
-                val isLeft = keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_LEFT
-                val isRight = keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
-                if (!isSeekable) return@onKeyEvent false
+            val isLeft = keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_LEFT
+            val isRight = keyEvent.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+            if (!isSeekable) return@onKeyEvent false
 
-                if (isLeft || isRight) {
-                    if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                        val newDirection = if (isLeft) -1 else 1
-                        if (seekJob != null && seekDirection == newDirection) {
-                            return@onKeyEvent true
-                        }
-                        if (seekJob == null) {
-                            onSeekStart()
-                        }
-                        val hadActiveSeek = seekJob != null
-                        seekJob?.cancel()
-                        seekDirection = newDirection
-                        seekStartNanos = System.nanoTime()
-                        didSeekDuringHold = false
-                        previewPositionMs = if (hadActiveSeek) previewPositionMs else positionMs
-                        seekJob = scope.launch {
-                            delay(70)
-                            var lastFrameNanos = withFrameNanos { it }
-                            var frameCount = 0
-                            while (isActive) {
-                                val frameNanos = withFrameNanos { it }
-                                val deltaMs = ((frameNanos - lastFrameNanos) / 1_000_000f).coerceIn(8f, 40f)
-                                lastFrameNanos = frameNanos
-                                val heldMs = ((frameNanos - seekStartNanos) / 1_000_000f).coerceAtLeast(0f)
-                                val velocityPerSecond = when {
-                                    heldMs < 350f -> 90_000f
-                                    heldMs < 1100f -> 240_000f
-                                    heldMs < 2200f -> 480_000f
-                                    else -> 900_000f
-                                }
-                                val delta = (velocityPerSecond * deltaMs / 1000f) * seekDirection
-                                val next = (previewPositionMs + delta).roundToLong()
-                                    .coerceIn(0L, durationMs)
-                                if (next != previewPositionMs) {
-                                    previewPositionMs = next
-                                    didSeekDuringHold = true
-                                    // Throttle preview updates to every other frame to reduce recompositions
-                                    frameCount++
-                                    if (frameCount % 2 == 0) {
-                                        onSeekPreview(next)
-                                        onInteraction()
-                                    }
+            if (isLeft || isRight) {
+                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
+                    val newDirection = if (isLeft) -1 else 1
+                    if (seekJob != null && seekDirection == newDirection) {
+                        return@onKeyEvent true
+                    }
+                    if (seekJob == null) {
+                        onSeekStart()
+                    }
+                    val hadActiveSeek = seekJob != null
+                    seekJob?.cancel()
+                    seekDirection = newDirection
+                    seekStartNanos = System.nanoTime()
+                    didSeekDuringHold = false
+                    previewPositionMs = if (hadActiveSeek) previewPositionMs else positionMs
+                    seekJob = scope.launch {
+                        delay(70)
+                        var lastFrameNanos = withFrameNanos { it }
+                        var frameCount = 0
+                        while (isActive) {
+                            val frameNanos = withFrameNanos { it }
+                            val deltaMs = ((frameNanos - lastFrameNanos) / 1_000_000f).coerceIn(8f, 40f)
+                            lastFrameNanos = frameNanos
+                            val heldMs = ((frameNanos - seekStartNanos) / 1_000_000f).coerceAtLeast(0f)
+                            val velocityPerSecond = when {
+                                heldMs < 350f -> 90_000f
+                                heldMs < 1100f -> 240_000f
+                                heldMs < 2200f -> 480_000f
+                                else -> 900_000f
+                            }
+                            val delta = (velocityPerSecond * deltaMs / 1000f) * seekDirection
+                            val next = (previewPositionMs + delta).roundToLong()
+                                .coerceIn(0L, durationMs)
+                            if (next != previewPositionMs) {
+                                previewPositionMs = next
+                                didSeekDuringHold = true
+                                frameCount++
+                                if (frameCount % 2 == 0) {
+                                    onSeekPreview(next)
+                                    onInteraction()
                                 }
                             }
                         }
-                        true
-                    } else if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_UP) {
-                        val activeJob = seekJob
-                        seekJob = null
-                        activeJob?.cancel()
-                        val finalPosition = if (didSeekDuringHold) {
-                            previewPositionMs
-                        } else {
-                            (positionMs + (10_000L * seekDirection)).coerceIn(0L, durationMs)
-                        }
-                        seekStartNanos = 0L
-                        didSeekDuringHold = false
-                        previewPositionMs = finalPosition
-                        onSeekCommit(finalPosition)
-                        true
-                    } else {
-                        false
                     }
-                } else false
-            }
-            // Only focusable if controls are shown
-            .focusable(controlsEnabled)
-            .padding(vertical = 4.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            BoxWithConstraints(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(containerHeight)
-                    .clipToBounds(),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(barHeight)
-                        .clip(CircleShape)
-                        .background(ProgressTrack)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(animatedBufferedProgress)
-                            .fillMaxHeight()
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.22f))
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(animatedProgress)
-                            .fillMaxHeight()
-                            .clip(CircleShape)
-                            .background(ProgressFill)
-                    )
+                    true
+                } else if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_UP) {
+                    val activeJob = seekJob
+                    seekJob = null
+                    activeJob?.cancel()
+                    val finalPosition = if (didSeekDuringHold) {
+                        previewPositionMs
+                    } else {
+                        (positionMs + (10_000L * seekDirection)).coerceIn(0L, durationMs)
+                    }
+                    seekStartNanos = 0L
+                    didSeekDuringHold = false
+                    previewPositionMs = finalPosition
+                    onSeekCommit(finalPosition)
+                    true
+                } else {
+                    false
                 }
-                if (isProgressFocused) {
-                    val maxOffset = (maxWidth - dotSize).coerceAtLeast(0.dp)
-                    val dotOffset = (maxWidth * animatedProgress - dotSize / 2).coerceIn(0.dp, maxOffset)
-                    Box(
-                        modifier = Modifier
-                            .offset(x = dotOffset)
-                            .size(dotSize)
-                            .clip(CircleShape)
-                            .background(Color.White)
-                    )
-                }
-            }
+            } else false
+        }
+        .focusable(controlsEnabled)
+        .padding(vertical = 4.dp)
+
+    Canvas(modifier = canvasModifier) {
+        val trackTop = (size.height - barHeight.toPx()) / 2f
+        val barHeightPx = barHeight.toPx()
+        val dotSizePx = dotSize.toPx()
+        val cornerRadius = barHeightPx / 2f
+
+        val trackRect = androidx.compose.ui.geometry.Rect(
+            left = 0f,
+            top = trackTop,
+            right = size.width,
+            bottom = trackTop + barHeightPx
+        )
+        drawRoundRect(
+            color = ProgressTrack,
+            topLeft = trackRect.topLeft,
+            size = androidx.compose.ui.geometry.Size(trackRect.width, trackRect.height),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius, cornerRadius)
+        )
+
+        val bufferedWidth = size.width * animatedBufferedProgress
+        if (bufferedWidth > 0f) {
+            drawRoundRect(
+                color = Color.White.copy(alpha = 0.22f),
+                topLeft = trackRect.topLeft,
+                size = androidx.compose.ui.geometry.Size(bufferedWidth, trackRect.height),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius, cornerRadius)
+            )
+        }
+
+        val progressWidth = size.width * animatedProgress
+        if (progressWidth > 0f) {
+            drawRoundRect(
+                color = ProgressFill,
+                topLeft = trackRect.topLeft,
+                size = androidx.compose.ui.geometry.Size(progressWidth, trackRect.height),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius, cornerRadius)
+            )
+        }
+
+        if (isProgressFocused) {
+            val dotCenterX = progressWidth.coerceIn(0f, size.width)
+            val dotCenterY = size.height / 2f
+            drawCircle(
+                color = Color.White,
+                radius = dotSizePx / 2f,
+                center = androidx.compose.ui.geometry.Offset(dotCenterX, dotCenterY)
+            )
         }
     }
 }
@@ -1202,7 +1169,6 @@ private fun TrackSelectionMenu(
     exoPlayer: ExoPlayer,
     trackSelector: DefaultTrackSelector,
     trackType: Int,
-    onAudioSelectionAttempt: (DefaultTrackSelector.Parameters, TrackOption) -> Unit,
     onDismiss: () -> Unit
 ) {
     val tracks = exoPlayer.currentTracks
@@ -1361,9 +1327,6 @@ private fun TrackSelectionMenu(
                                         KeyEvent.KEYCODE_DPAD_CENTER,
                                         KeyEvent.KEYCODE_ENTER,
                                         KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                                            if (trackType == C.TRACK_TYPE_AUDIO) {
-                                                onAudioSelectionAttempt(trackSelector.parameters, option)
-                                            }
                                             applyTrackSelection(trackSelector, trackType, rendererIndex, trackGroups, option)
                                             onDismiss()
                                             true
@@ -1379,9 +1342,6 @@ private fun TrackSelectionMenu(
                                 }
                             }
                             .clickable(enabled = isEnabled) {
-                                if (trackType == C.TRACK_TYPE_AUDIO) {
-                                    onAudioSelectionAttempt(trackSelector.parameters, option)
-                                }
                                 applyTrackSelection(trackSelector, trackType, rendererIndex, trackGroups, option)
                                 onDismiss()
                             }
