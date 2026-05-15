@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -43,7 +42,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -119,7 +120,6 @@ fun PlayerScreen(
     var isPlaying by remember { mutableStateOf(true) }
     var showControls by remember { mutableStateOf(true) }
     var lastInteraction by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var isBuffering by remember { mutableStateOf(true) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var retryCount by remember { mutableIntStateOf(0) }
     var retryToken by remember { mutableLongStateOf(0L) }
@@ -200,11 +200,7 @@ fun PlayerScreen(
 
             override fun onPlaybackStateChanged(state: Int) {
                 when (state) {
-                    Player.STATE_BUFFERING -> {
-                        isBuffering = true
-                    }
                     Player.STATE_READY -> {
-                        isBuffering = false
                         wasPausedAtMs = -1L
                         if (playbackError != null) {
                             playbackError = null
@@ -221,12 +217,9 @@ fun PlayerScreen(
                         }
                     }
                     Player.STATE_ENDED -> {
-                        isBuffering = false
                         PlaybackProgressStore.clearProgress(context, mediaPath)
                     }
-                    Player.STATE_IDLE -> {
-                        isBuffering = true
-                    }
+                    else -> Unit
                 }
             }
         }
@@ -459,20 +452,6 @@ fun PlayerScreen(
             }
         }
 
-        if (isBuffering && playbackError == null && !showControls) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(
-                    color = Color.White,
-                    strokeWidth = 3.dp
-                )
-            }
-        }
-
         PlayerControlsOverlay(
             exoPlayer = exoPlayer,
             title = title,
@@ -602,7 +581,7 @@ private fun BoxScope.PlayerControlsOverlay(
         modifier = Modifier
             .align(Alignment.TopStart)
             .fillMaxWidth()
-            .height(72.dp)
+            .height(88.dp)
             .alpha(controlsAlpha)
             .playerVerticalScrim(topScrimColors)
     )
@@ -610,14 +589,14 @@ private fun BoxScope.PlayerControlsOverlay(
     Text(
         text = title,
         color = TextColor,
-        fontSize = 18.sp,
-        fontWeight = FontWeight.SemiBold,
+        fontSize = 22.sp,
+        fontWeight = FontWeight.Bold,
         fontFamily = DmSans,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .align(Alignment.TopStart)
-            .padding(horizontal = 24.dp, vertical = 18.dp)
+            .padding(horizontal = 24.dp, vertical = 20.dp)
             .fillMaxWidth()
             .alpha(controlsAlpha)
     )
@@ -795,6 +774,9 @@ private fun BoxScope.PlayerBottomControls(
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     fontFamily = DmSans,
+                    textAlign = TextAlign.End,
+                    style = TextStyle(fontFeatureSettings = "tnum"),
+                    modifier = Modifier.width(144.dp),
                     maxLines = 1
                 )
             }
