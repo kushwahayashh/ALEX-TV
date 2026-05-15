@@ -924,14 +924,17 @@ private fun PlayerSeekBar(
                             val frameNanos = withFrameNanos { it }
                             val deltaMs = ((frameNanos - lastFrameNanos) / 1_000_000f).coerceIn(8f, 40f)
                             lastFrameNanos = frameNanos
+
+                            // Determine seek stage based on total hold time
                             val heldMs = ((frameNanos - seekStartNanos) / 1_000_000f).coerceAtLeast(0f)
-                            val velocityPerSecond = when {
-                                heldMs < 350f -> 90_000f
-                                heldMs < 1100f -> 240_000f
-                                heldMs < 2200f -> 480_000f
-                                else -> 900_000f
+                            val pctPerSecond = when {
+                                heldMs < 1000f -> 3.0f     // 3% per second (fine scrub)
+                                heldMs < 3000f -> 10.0f    // 10% per second (normal scan)
+                                else -> 30.0f              // 30% per second (fast scan)
                             }
-                            val delta = (velocityPerSecond * deltaMs / 1000f) * seekDirection
+
+                            // Convert pct/second to pct-per-frame, then to ms
+                            val delta = (pctPerSecond / 100f) * durationMs * (deltaMs / 1000f) * seekDirection
                             val next = (previewPositionMs + delta).roundToLong()
                                 .coerceIn(0L, durationMs)
                             if (next != previewPositionMs) {
