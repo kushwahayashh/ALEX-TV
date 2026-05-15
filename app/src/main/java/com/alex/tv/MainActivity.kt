@@ -252,7 +252,7 @@ class MainActivity : AppCompatActivity() {
             if (url.isBlank()) return
             runOnUiThread {
                 val intent = Intent(this@MainActivity, PlayerActivity::class.java)
-                intent.putExtra(PlayerActivity.EXTRA_STREAM_URL, url)
+                intent.putExtra(PlayerActivity.EXTRA_STREAM_URL, StreamProxy.proxyUrl(url))
                 intent.putExtra(PlayerActivity.EXTRA_TITLE, title)
                 intent.putExtra(PlayerActivity.EXTRA_MEDIA_PATH, mediaPath)
                 startActivity(intent)
