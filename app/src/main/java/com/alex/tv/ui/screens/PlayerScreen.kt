@@ -145,9 +145,10 @@ fun PlayerScreen(
 
     fun playerPlay() {
         if (wasPausedAtMs >= 0L) {
-            // Resync: seek back to the exact pause position to flush decoder buffers
-            // and realign audio+video clocks after tunneling pause
-            exoPlayer.seekTo(wasPausedAtMs)
+            // Seek on resume to flush decoder buffers and realign audio/video clocks.
+            // Use the settled paused position when it has advanced slightly after pause.
+            val resumePositionMs = maxOf(wasPausedAtMs, exoPlayer.currentPosition)
+            exoPlayer.seekTo(resumePositionMs)
             wasPausedAtMs = -1L
         }
         exoPlayer.play()
