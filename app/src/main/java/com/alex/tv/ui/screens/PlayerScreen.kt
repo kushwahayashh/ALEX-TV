@@ -43,7 +43,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -557,10 +556,10 @@ private fun BoxScope.PlayerControlsOverlay(
     val bottomScrimColors = remember {
         listOf(
             Color.Transparent,
-            Color(0x1A000000),
-            Color(0x66000000),
-            Color(0xB3000000),
-            Color(0xD9000000)
+            Color(0x12000000),
+            Color(0x52000000),
+            Color(0x99000000),
+            Color(0xC7000000)
         )
     }
     val topScrimColors = remember {
@@ -576,7 +575,7 @@ private fun BoxScope.PlayerControlsOverlay(
         modifier = Modifier
             .align(Alignment.BottomStart)
             .fillMaxWidth()
-            .height(240.dp)
+            .height(208.dp)
             .alpha(controlsAlpha)
             .playerVerticalScrim(bottomScrimColors)
     )
@@ -611,14 +610,14 @@ private fun BoxScope.PlayerControlsOverlay(
     Text(
         text = title,
         color = TextColor,
-        fontSize = 16.sp,
+        fontSize = 18.sp,
         fontWeight = FontWeight.SemiBold,
         fontFamily = DmSans,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .align(Alignment.TopStart)
-            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .padding(horizontal = 24.dp, vertical = 18.dp)
             .fillMaxWidth()
             .alpha(controlsAlpha)
     )
@@ -767,7 +766,7 @@ private fun BoxScope.PlayerBottomControls(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PlayerButton(
-                    icon = painterResource(id = R.drawable.ic_caption),
+                    icon = PlayerIcons.Caption,
                     onClick = onShowCaptions,
                     modifier = Modifier.focusRequester(captionFocusRequester),
                     focusProps = {
@@ -779,7 +778,7 @@ private fun BoxScope.PlayerBottomControls(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 PlayerButton(
-                    icon = painterResource(id = R.drawable.ic_audio),
+                    icon = PlayerIcons.Audio,
                     onClick = onShowAudio,
                     modifier = Modifier.focusRequester(audioFocusRequester),
                     focusProps = {
@@ -792,8 +791,9 @@ private fun BoxScope.PlayerBottomControls(
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     text = "${if (durationMs > 0L) formatTime(displayedPositionMs) else "--:--"} / ${formatTimeOrUnknown(durationMs)}",
-                    color = Color(0xCCFFFFFF),
-                    fontSize = 12.sp,
+                    color = Color(0xE6FFFFFF),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
                     fontFamily = DmSans,
                     maxLines = 1
                 )
@@ -1027,14 +1027,12 @@ fun PlayerButton(
     focusProps: (androidx.compose.ui.focus.FocusProperties.() -> Unit)? = null
 ) {
     var isFocused by remember { mutableStateOf(false) }
-    val size = if (isPrimary) 44.dp else 40.dp
-    val focusedScale = if (isPrimary) 1.0f else 1.1f
-    val scale by animateFloatAsState(targetValue = if (isFocused) focusedScale else 1f)
+    val scale by animateFloatAsState(targetValue = if (isFocused && !isPrimary) 1.1f else 1f)
 
     Box(
         modifier = modifier
             .scale(scale)
-            .size(size)
+            .size(44.dp)
             .clip(CircleShape)
             .focusProperties { focusProps?.invoke(this) }
             .onFocusChanged {
@@ -1068,63 +1066,7 @@ fun PlayerButton(
             imageVector = icon,
             contentDescription = null,
             tint = if (isFocused) Color.Black else Color.White,
-            modifier = Modifier.size(if (isPrimary) 28.dp else 20.dp)
-        )
-    }
-}
-
-@Composable
-fun PlayerButton(
-    icon: androidx.compose.ui.graphics.painter.Painter,
-    onClick: () -> Unit,
-    isPrimary: Boolean = false,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    focusProps: (androidx.compose.ui.focus.FocusProperties.() -> Unit)? = null
-) {
-    var isFocused by remember { mutableStateOf(false) }
-    val size = if (isPrimary) 44.dp else 40.dp
-    val focusedScale = if (isPrimary) 1.0f else 1.1f
-    val scale by animateFloatAsState(targetValue = if (isFocused) focusedScale else 1f)
-
-    Box(
-        modifier = modifier
-            .scale(scale)
-            .size(size)
-            .clip(CircleShape)
-            .focusProperties { focusProps?.invoke(this) }
-            .onFocusChanged {
-                if (isFocused != it.isFocused) {
-                    isFocused = it.isFocused
-                }
-            }
-            .focusable(enabled)
-            .onKeyEvent { keyEvent ->
-                if (!enabled) return@onKeyEvent false
-                if (keyEvent.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
-                    when (keyEvent.nativeKeyEvent.keyCode) {
-                        KeyEvent.KEYCODE_DPAD_CENTER,
-                        KeyEvent.KEYCODE_ENTER,
-                        KeyEvent.KEYCODE_NUMPAD_ENTER,
-                        KeyEvent.KEYCODE_SPACE -> {
-                            onClick()
-                            true
-                        }
-                        else -> false
-                    }
-                } else {
-                    false
-                }
-            }
-            .clickable(enabled = enabled) { onClick() }
-            .background(if (isFocused) Color.White else Color.Transparent),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            painter = icon,
-            contentDescription = null,
-            tint = if (isFocused) Color.Black else Color.White,
-            modifier = Modifier.size(if (isPrimary) 28.dp else 20.dp)
+            modifier = Modifier.size(28.dp)
         )
     }
 }
@@ -1357,7 +1299,7 @@ private fun TrackSelectionMenu(
                         if (isSelected) {
                             Spacer(modifier = Modifier.weight(1f))
                             Icon(
-                                painter = painterResource(id = R.drawable.ic_circle_check),
+                                imageVector = PlayerIcons.CircleCheck,
                                 contentDescription = null,
                                 tint = textColor,
                                 modifier = Modifier.size(16.dp)
