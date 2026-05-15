@@ -708,6 +708,9 @@ private fun BoxScope.PlayerBottomControls(
                     scrubPositionMs = currentPositionMs
                 }
             },
+            onSeekPreview = { previewMs ->
+                scrubPositionMs = previewMs
+            },
             onSeekCommit = { finalPosition ->
                 scrubPositionMs = finalPosition
                 currentPositionMs = finalPosition
@@ -830,6 +833,7 @@ private fun PlayerSeekBar(
     focusRequester: FocusRequester,
     downRequester: FocusRequester,
     onSeekStart: () -> Unit,
+    onSeekPreview: (Long) -> Unit,
     onSeekCommit: (Long) -> Unit
 ) {
     var isProgressFocused by remember { mutableStateOf(false) }
@@ -942,6 +946,7 @@ private fun PlayerSeekBar(
                                 frameCount++
                                 if (frameCount % 2 == 0) {
                                     previewPositionMs = next
+                                    onSeekPreview(next)
                                     val now = System.currentTimeMillis()
                                     if (now - lastInteractionTime > 500) {
                                         onInteraction()
