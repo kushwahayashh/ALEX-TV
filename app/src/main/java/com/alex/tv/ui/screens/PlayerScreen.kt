@@ -10,7 +10,6 @@ import android.util.TypedValue
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -29,7 +28,6 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
@@ -58,7 +56,6 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.TrackGroup
-import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.source.TrackGroupArray
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -167,12 +164,16 @@ fun PlayerScreen(
         )
     }
 
-    BackHandler(enabled = isMenuOpen) {
+    fun dismissTrackMenus() {
         showCaptionMenu = false
         showAudioMenu = false
         showControls = true
         lastInteraction = System.currentTimeMillis()
         playPauseFocusRequester.requestFocus()
+    }
+
+    BackHandler(enabled = isMenuOpen) {
+        dismissTrackMenus()
     }
 
     // Listen to exoPlayer play state changes
@@ -260,7 +261,7 @@ fun PlayerScreen(
         val shouldResume = if (retryToken != 0L) exoPlayer.playWhenReady else true
         exoPlayer.stop()
         exoPlayer.clearMediaItems()
-        if (!streamUrl.isNullOrBlank()) {
+        if (streamUrl.isNotBlank()) {
             exoPlayer.setMediaItem(MediaItem.fromUri(streamUrl))
             exoPlayer.prepare()
             exoPlayer.playWhenReady = shouldResume
@@ -319,10 +320,7 @@ fun PlayerScreen(
                     val keyCode = keyEvent.nativeKeyEvent.keyCode
                     if (isMenuOpen) {
                         if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE) {
-                            showCaptionMenu = false
-                            showAudioMenu = false
-                            showControls = true
-                            playPauseFocusRequester.requestFocus()
+                            dismissTrackMenus()
                             return@onKeyEvent true
                         }
                         // Let the menu handle navigation keys (D-pad up/down).
@@ -330,13 +328,7 @@ fun PlayerScreen(
                     }
                     when (keyCode) {
                         KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_ESCAPE -> {
-                            if (isMenuOpen) {
-                                showCaptionMenu = false
-                                showAudioMenu = false
-                                showControls = true
-                                playPauseFocusRequester.requestFocus()
-                                true
-                            } else if (showControls) {
+                            if (showControls) {
                                 showControls = false
                                 screenFocusRequester.requestFocus()
                                 true
@@ -776,7 +768,7 @@ private fun BoxScope.PlayerBottomControls(
                     fontFamily = DmSans,
                     textAlign = TextAlign.End,
                     style = TextStyle(fontFeatureSettings = "tnum"),
-                    modifier = Modifier.width(144.dp),
+                    modifier = Modifier.width(108.dp),
                     maxLines = 1
                 )
             }
@@ -797,7 +789,7 @@ private fun Modifier.playerVerticalScrim(colors: List<Color>): Modifier = drawWi
 
 // Extract seekbar to scope state reads and prevent whole-screen recomposition
 @Composable
-fun PlayerSeekBar(
+private fun PlayerSeekBar(
     positionMs: Long,
     durationMs: Long,
     bufferedPositionMs: Long,
@@ -852,8 +844,8 @@ fun PlayerSeekBar(
 
     val progress = if (isDurationKnown) previewPositionMs.toFloat() / durationMs.toFloat() else 0f
     val bufferedProgress = if (isDurationKnown) bufferedPositionMs.toFloat() / durationMs.toFloat() else 0f
-    val animatedProgress = progress.coerceIn(0f, 1f)
-    val animatedBufferedProgress = bufferedProgress.coerceIn(0f, 1f)
+    val clampedProgress = progress.coerceIn(0f, 1f)
+    val clampedBufferedProgress = bufferedProgress.coerceIn(0f, 1f)
     val containerHeight = 16.dp
 
     val canvasModifier = Modifier
@@ -967,7 +959,7 @@ fun PlayerSeekBar(
             cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius, cornerRadius)
         )
 
-        val bufferedWidth = size.width * animatedBufferedProgress
+        val bufferedWidth = size.width * clampedBufferedProgress
         if (bufferedWidth > 0f) {
             drawRoundRect(
                 color = Color.White.copy(alpha = 0.22f),
@@ -977,7 +969,7 @@ fun PlayerSeekBar(
             )
         }
 
-        val progressWidth = size.width * animatedProgress
+        val progressWidth = size.width * clampedProgress
         if (progressWidth > 0f) {
             drawRoundRect(
                 color = ProgressFill,
@@ -1000,7 +992,7 @@ fun PlayerSeekBar(
 }
 
 @Composable
-fun PlayerButton(
+private fun PlayerButton(
     icon: ImageVector,
     onClick: () -> Unit,
     isPrimary: Boolean = false,
@@ -1055,7 +1047,6 @@ fun PlayerButton(
 
 private data class TrackOption(
     val label: String,
-    val group: Tracks.Group?,
     val trackIndex: Int?,
     val groupIndex: Int?,
     val isSelected: Boolean,
@@ -1111,7 +1102,6 @@ private fun TrackSelectionMenu(
         built.add(
             TrackOption(
                 label = "Auto",
-                group = null,
                 trackIndex = null,
                 groupIndex = null,
                 isSelected = autoSelected,
@@ -1123,7 +1113,6 @@ private fun TrackSelectionMenu(
             built.add(
                 TrackOption(
                     label = "Off",
-                    group = null,
                     trackIndex = null,
                     groupIndex = null,
                     isSelected = isTypeDisabled,
@@ -1143,7 +1132,6 @@ private fun TrackSelectionMenu(
                 built.add(
                     TrackOption(
                         label = label,
-                        group = group,
                         trackIndex = i,
                         groupIndex = groupIndex,
                         isSelected = group.isTrackSelected(i) && !isTypeDisabled,
@@ -1163,7 +1151,7 @@ private fun TrackSelectionMenu(
         firstEnabledIndex >= 0 -> firstEnabledIndex
         else -> 0
     }
-    val hasRealTracks = options.any { !it.isOff && !it.isAuto && it.group != null }
+    val hasRealTracks = options.any { !it.isOff && !it.isAuto }
 
     LaunchedEffect(options.size, initialFocusIndex) {
         if (options.isNotEmpty() && initialFocusIndex in options.indices) {
@@ -1359,7 +1347,7 @@ private fun formatsSimilar(a: Format, b: Format): Boolean {
     return true
 }
 
-fun formatTime(milliseconds: Long): String {
+private fun formatTime(milliseconds: Long): String {
     val totalSeconds = (milliseconds / 1000).coerceAtLeast(0)
     val hours = totalSeconds / 3600
     val minutes = (totalSeconds / 60) % 60
@@ -1371,7 +1359,7 @@ fun formatTime(milliseconds: Long): String {
     }
 }
 
-fun formatTimeOrUnknown(milliseconds: Long): String {
+private fun formatTimeOrUnknown(milliseconds: Long): String {
     if (milliseconds <= 0L) return "--:--"
     return formatTime(milliseconds)
 }
