@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -117,6 +118,7 @@ fun PlayerScreen(
     var isPlaying by remember { mutableStateOf(true) }
     var showControls by remember { mutableStateOf(true) }
     var lastInteraction by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var isBuffering by remember { mutableStateOf(true) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var retryCount by remember { mutableIntStateOf(0) }
     var retryToken by remember { mutableLongStateOf(0L) }
@@ -202,7 +204,11 @@ fun PlayerScreen(
 
             override fun onPlaybackStateChanged(state: Int) {
                 when (state) {
+                    Player.STATE_BUFFERING -> {
+                        isBuffering = true
+                    }
                     Player.STATE_READY -> {
+                        isBuffering = false
                         wasPausedAtMs = -1L
                         if (playbackError != null) {
                             playbackError = null
@@ -219,9 +225,12 @@ fun PlayerScreen(
                         }
                     }
                     Player.STATE_ENDED -> {
+                        isBuffering = false
                         PlaybackProgressStore.clearProgress(context, mediaPath)
                     }
-                    else -> Unit
+                    Player.STATE_IDLE -> {
+                        isBuffering = true
+                    }
                 }
             }
         }
@@ -442,6 +451,19 @@ fun PlayerScreen(
                         fontFamily = DmSans
                     )
                 }
+            }
+        }
+
+        if (isBuffering && playbackError == null && !showControls && !isMenuOpen) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    color = Color.White,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(36.dp)
+                )
             }
         }
 
