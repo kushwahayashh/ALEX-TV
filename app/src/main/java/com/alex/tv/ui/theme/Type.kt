@@ -8,15 +8,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.alex.tv.R
 
-val DmSans = FontFamily(
-    Font(R.font.dm_sans_regular, FontWeight.Normal),
-    Font(R.font.dm_sans_regular, FontWeight.Normal),
-    Font(R.font.dm_sans_regular, FontWeight.Normal)
+val SfProRounded = FontFamily(
+    Font(R.font.sf_pro_rounded_light, FontWeight.Light),
+    Font(R.font.sf_pro_rounded_regular, FontWeight.Normal),
+    Font(R.font.sf_pro_rounded_medium, FontWeight.Medium),
+    Font(R.font.sf_pro_rounded_semibold, FontWeight.SemiBold),
+    Font(R.font.sf_pro_rounded_bold, FontWeight.Bold),
 )
 
 val Typography = Typography(
     bodyLarge = TextStyle(
-        fontFamily = DmSans,
+        fontFamily = SfProRounded,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
@@ -24,16 +26,16 @@ val Typography = Typography(
         color = TextColor
     ),
     titleLarge = TextStyle(
-        fontFamily = DmSans,
-        fontWeight = FontWeight.Normal,
+        fontFamily = SfProRounded,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 22.sp,
         lineHeight = 28.sp,
         letterSpacing = 0.sp,
         color = TextColor
     ),
     labelSmall = TextStyle(
-        fontFamily = DmSans,
-        fontWeight = FontWeight.Normal,
+        fontFamily = SfProRounded,
+        fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
         lineHeight = 16.sp,
         letterSpacing = 0.5.sp,

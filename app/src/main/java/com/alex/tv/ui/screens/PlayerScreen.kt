@@ -140,6 +140,8 @@ fun PlayerScreen(
     var resumeOnStart by remember { mutableStateOf(false) }
     var wasPausedAtMs by remember { mutableLongStateOf(-1L) }
 
+    var pendingResumeSeekMs by remember { mutableLongStateOf(-1L) }
+
     fun playerPause() {
         wasPausedAtMs = exoPlayer.currentPosition
         exoPlayer.pause()
@@ -147,13 +149,15 @@ fun PlayerScreen(
 
     fun playerPlay() {
         if (wasPausedAtMs >= 0L) {
-            // Seek on resume to flush decoder buffers and realign audio/video clocks.
-            // Use the settled paused position when it has advanced slightly after pause.
-            val resumePositionMs = maxOf(wasPausedAtMs, exoPlayer.currentPosition)
-            exoPlayer.seekTo(resumePositionMs)
+            // Seek to the exact pause position to flush decoder buffers and realign
+            // audio+video clocks. Store it so STATE_READY handler can call play()
+            // only after the seek completes — this avoids both jitter and desync.
+            pendingResumeSeekMs = wasPausedAtMs
+            exoPlayer.seekTo(wasPausedAtMs)
             wasPausedAtMs = -1L
+        } else {
+            exoPlayer.play()
         }
-        exoPlayer.play()
     }
 
     fun persistPlaybackProgress() {
@@ -222,6 +226,10 @@ fun PlayerScreen(
                             }
                             exoPlayer.seekTo(seekTarget)
                             pendingInitialSeekMs = 0L
+                        } else if (pendingResumeSeekMs >= 0L) {
+                            // Resume seek completed — start playback now that decoders are realigned
+                            pendingResumeSeekMs = -1L
+                            exoPlayer.play()
                         }
                     }
                     Player.STATE_ENDED -> {
@@ -394,7 +402,7 @@ fun PlayerScreen(
     ) {
         AndroidView(
             factory = {
-                val subtitleTypeface = ResourcesCompat.getFont(it, R.font.dm_sans_regular)
+                val subtitleTypeface = ResourcesCompat.getFont(it, R.font.sf_pro_rounded_regular)
                 PlayerView(it).apply {
                     player = exoPlayer
                     useController = false
@@ -441,14 +449,14 @@ fun PlayerScreen(
                         text = playbackError ?: "Playback error",
                         color = Color.White,
                         fontSize = 16.sp,
-                        fontFamily = DmSans
+                        fontFamily = SfProRounded
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = "Press Back to exit",
                         color = Color(0xB3FFFFFF),
                         fontSize = 12.sp,
-                        fontFamily = DmSans
+                        fontFamily = SfProRounded
                     )
                 }
             }
@@ -606,7 +614,7 @@ private fun BoxScope.PlayerControlsOverlay(
         color = TextColor,
         fontSize = 22.sp,
         fontWeight = FontWeight.Bold,
-        fontFamily = DmSans,
+        fontFamily = SfProRounded,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
@@ -788,7 +796,7 @@ private fun BoxScope.PlayerBottomControls(
                     color = Color(0xE6FFFFFF),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
-                    fontFamily = DmSans,
+                    fontFamily = SfProRounded,
                     textAlign = TextAlign.End,
                     style = TextStyle(fontFeatureSettings = "tnum"),
                     modifier = Modifier.width(108.dp),
@@ -1211,7 +1219,7 @@ private fun TrackSelectionMenu(
                 color = TextColor,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Normal,
-                fontFamily = DmSans
+                fontFamily = SfProRounded
             )
             Spacer(modifier = Modifier.height(10.dp))
             if (!hasRealTracks) {
@@ -1219,7 +1227,7 @@ private fun TrackSelectionMenu(
                     text = "No tracks available",
                     color = Color(0xB3FFFFFF),
                     fontSize = 12.sp,
-                    fontFamily = DmSans
+                    fontFamily = SfProRounded
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -1286,7 +1294,7 @@ private fun TrackSelectionMenu(
                             text = option.label,
                             color = textColor,
                             fontSize = 13.sp,
-                            fontFamily = DmSans,
+                            fontFamily = SfProRounded,
                             maxLines = 1
                         )
                         if (isSelected) {
