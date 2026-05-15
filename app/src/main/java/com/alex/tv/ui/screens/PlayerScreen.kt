@@ -792,14 +792,14 @@ private fun BoxScope.PlayerBottomControls(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = "${if (durationMs > 0L) formatTime(displayedPositionMs) else "--:--"} / ${formatTimeOrUnknown(durationMs)}",
+                    text = "${if (durationMs > 0L) formatTime(displayedPositionMs, durationMs) else "--:--"} / ${formatTimeOrUnknown(durationMs, durationMs)}",
                     color = Color(0xE6FFFFFF),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     fontFamily = SfProRounded,
                     textAlign = TextAlign.End,
                     style = TextStyle(fontFeatureSettings = "tnum"),
-                    modifier = Modifier.width(108.dp),
+                    modifier = Modifier.widthIn(min = 108.dp),
                     maxLines = 1
                 )
             }
@@ -1378,19 +1378,20 @@ private fun formatsSimilar(a: Format, b: Format): Boolean {
     return true
 }
 
-private fun formatTime(milliseconds: Long): String {
+private fun formatTime(milliseconds: Long, durationMs: Long = 0L): String {
     val totalSeconds = (milliseconds / 1000).coerceAtLeast(0)
     val hours = totalSeconds / 3600
     val minutes = (totalSeconds / 60) % 60
     val seconds = totalSeconds % 60
-    return if (hours > 0) {
+    val showHours = hours > 0 || durationMs >= 3_600_000L
+    return if (showHours) {
         "%d:%02d:%02d".format(hours, minutes, seconds)
     } else {
         "%02d:%02d".format(minutes, seconds)
     }
 }
 
-private fun formatTimeOrUnknown(milliseconds: Long): String {
+private fun formatTimeOrUnknown(milliseconds: Long, durationMs: Long = 0L): String {
     if (milliseconds <= 0L) return "--:--"
-    return formatTime(milliseconds)
+    return formatTime(milliseconds, durationMs)
 }
