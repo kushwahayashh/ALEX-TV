@@ -9,7 +9,6 @@ import androidx.compose.ui.unit.sp
 import com.alex.tv.R
 
 val SfProRounded = FontFamily(
-    Font(R.font.sf_pro_rounded_light, FontWeight.Light),
     Font(R.font.sf_pro_rounded_regular, FontWeight.Normal),
     Font(R.font.sf_pro_rounded_medium, FontWeight.Medium),
     Font(R.font.sf_pro_rounded_semibold, FontWeight.SemiBold),
