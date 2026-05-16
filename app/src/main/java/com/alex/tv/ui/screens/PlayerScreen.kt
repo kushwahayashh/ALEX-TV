@@ -128,6 +128,8 @@ fun PlayerScreen(
     var showControls by remember { mutableStateOf(true) }
     var lastInteraction by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var isBuffering by remember { mutableStateOf(true) }
+    var showBufferingSpinner by remember { mutableStateOf(false) }
+    var hasPlaybackReachedReady by remember(streamUrl) { mutableStateOf(false) }
     var playbackError by remember { mutableStateOf<String?>(null) }
     var retryCount by remember { mutableIntStateOf(0) }
     var retryToken by remember { mutableLongStateOf(0L) }
@@ -222,6 +224,7 @@ fun PlayerScreen(
                     }
                     Player.STATE_READY -> {
                         isBuffering = false
+                        hasPlaybackReachedReady = true
                         wasPausedAtMs = -1L
                         if (playbackError != null) {
                             playbackError = null
@@ -303,6 +306,8 @@ fun PlayerScreen(
         retryCount = 0
         retryToken = 0L
         pendingInitialSeekMs = initialResumePositionMs.coerceAtLeast(0L)
+        hasPlaybackReachedReady = false
+        showBufferingSpinner = false
         showCaptionMenu = false
         showAudioMenu = false
     }
@@ -324,6 +329,19 @@ fun PlayerScreen(
     LaunchedEffect(showControls, isMenuOpen) {
         if (showControls && !isMenuOpen) {
             playPauseFocusRequester.requestFocus() // Return focus to controls when shown
+        }
+    }
+
+    LaunchedEffect(isBuffering, playbackError, isMenuOpen, hasPlaybackReachedReady) {
+        val canShowSpinner = isBuffering && playbackError == null && !isMenuOpen
+        if (!canShowSpinner) {
+            showBufferingSpinner = false
+            return@LaunchedEffect
+        }
+
+        delay(if (hasPlaybackReachedReady) 650 else 150)
+        if (isBuffering && playbackError == null && !isMenuOpen) {
+            showBufferingSpinner = true
         }
     }
 
@@ -471,31 +489,12 @@ fun PlayerScreen(
             }
         }
 
-        if (isBuffering && playbackError == null && !isMenuOpen) {
+        if (showBufferingSpinner) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(128.dp)
-                        .drawWithCache {
-                            val scrim = Brush.radialGradient(
-                                colors = listOf(
-                                    Color.Black.copy(alpha = 0.72f),
-                                    Color.Black.copy(alpha = 0.36f),
-                                    Color.Transparent
-                                ),
-                                radius = size.minDimension * 0.5f
-                            )
-                            onDrawBehind {
-                                drawCircle(brush = scrim)
-                            }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    PlayerBufferingSpinner()
-                }
+                PlayerBufferingSpinner()
             }
         }
 
@@ -559,7 +558,7 @@ fun PlayerScreen(
 @Composable
 private fun PlayerBufferingSpinner(
     modifier: Modifier = Modifier,
-    size: Dp = 54.dp
+    size: Dp = 46.dp
 ) {
     val transition = rememberInfiniteTransition(label = "playerBufferingSpinner")
     val rotation by transition.animateFloat(
@@ -572,7 +571,7 @@ private fun PlayerBufferingSpinner(
     )
 
     Canvas(modifier = modifier.size(size)) {
-        val strokeWidth = 2.dp.toPx()
+        val strokeWidth = 2.75.dp.toPx()
         val inset = strokeWidth / 2f
         val arcSize = Size(
             width = this.size.width - strokeWidth,
