@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ALEX Player Spinner Demo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #000;
+      --text: #fff;
+      --muted: rgba(255, 255, 255, 0.58);
+      --soft: rgba(255, 255, 255, 0.14);
+      --line: rgba(255, 255, 255, 0.82);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      min-height: 100%;
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .player {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at 50% 48%, rgba(255, 255, 255, 0.055), transparent 27%),
+        linear-gradient(180deg, rgba(0, 0, 0, 0.14), #000 78%);
+    }
+
+    .player::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(180deg, rgba(0, 0, 0, 0.76), transparent 18%, transparent 70%, rgba(0, 0, 0, 0.86)),
+        repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.018) 0 1px, transparent 1px 7px);
+      pointer-events: none;
+    }
+
+    .top-title {
+      position: absolute;
+      top: 24px;
+      left: 28px;
+      right: 28px;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0;
+    }
+
+    .loader-stage {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      justify-items: center;
+      gap: 16px;
+      transform: translateY(-8px);
+    }
+
+    .spinner {
+      position: relative;
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.14));
+    }
+
+    .spinner::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      border: 2px solid var(--soft);
+    }
+
+    .spinner::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      border: 2px solid transparent;
+      border-top-color: var(--line);
+      border-right-color: rgba(255, 255, 255, 0.42);
+      animation: spin 760ms cubic-bezier(0.55, 0.12, 0.28, 0.98) infinite;
+    }
+
+    .loader-label {
+      min-width: 120px;
+      text-align: center;
+      color: rgba(255, 255, 255, 0.74);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0;
+    }
+
+    .bottom-controls {
+      position: absolute;
+      left: 28px;
+      right: 28px;
+      bottom: 24px;
+      z-index: 2;
+    }
+
+    .timeline {
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.17);
+      overflow: hidden;
+    }
+
+    .timeline span {
+      display: block;
+      width: 38%;
+      height: 100%;
+      border-radius: inherit;
+      background: rgba(255, 255, 255, 0.84);
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 14px;
+      color: rgba(255, 255, 255, 0.74);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .icons {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .icon {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+    }
+
+    .variants {
+      position: absolute;
+      right: 28px;
+      top: 76px;
+      z-index: 3;
+      display: flex;
+      gap: 8px;
+    }
+
+    .variant {
+      height: 28px;
+      padding: 0 12px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.76);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .variant:focus,
+    .variant:hover,
+    .variant.active {
+      outline: none;
+      background: #fff;
+      color: #000;
+      border-color: #fff;
+    }
+
+    .player[data-size="small"] .spinner {
+      width: 42px;
+      height: 42px;
+    }
+
+    .player[data-size="large"] .spinner {
+      width: 66px;
+      height: 66px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @media (max-width: 680px) {
+      .top-title,
+      .bottom-controls {
+        left: 18px;
+        right: 18px;
+      }
+
+      .variants {
+        left: 18px;
+        right: 18px;
+        top: 66px;
+        justify-content: flex-start;
+      }
+
+      .title {
+        font-size: 18px;
+      }
+
+      .status {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="player" data-size="default">
+    <header class="top-title">
+      <h1 class="title">ALEX Player</h1>
+      <div class="status">Buffering</div>
+    </header>
+
+    <nav class="variants" aria-label="Spinner size">
+      <button class="variant" data-size="small">Small</button>
+      <button class="variant active" data-size="default">Default</button>
+      <button class="variant" data-size="large">Large</button>
+    </nav>
+
+    <section class="loader-stage" aria-label="Loading video">
+      <div class="spinner" aria-hidden="true"></div>
+      <div class="loader-label">Loading video</div>
+    </section>
+
+    <footer class="bottom-controls" aria-hidden="true">
+      <div class="timeline"><span></span></div>
+      <div class="control-row">
+        <div class="icons">
+          <div class="icon">||</div>
+          <div class="icon">&lt;&lt;</div>
+          <div class="icon">&gt;&gt;</div>
+        </div>
+        <div>24:18 / 1:42:06</div>
+      </div>
+    </footer>
+  </main>
+
+  <script>
+    const player = document.querySelector(".player");
+    const buttons = document.querySelectorAll(".variant");
+
+    buttons.forEach((button) => {
+      button.addEventListener("click", () => {
+        buttons.forEach((item) => item.classList.remove("active"));
+        button.classList.add("active");
+        player.dataset.size = button.dataset.size;
+      });
+    });
+  </script>
+</body>
+</html>

@@ -8,8 +8,11 @@ import android.widget.FrameLayout
 import android.graphics.Color as AndroidColor
 import android.util.TypedValue
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -20,7 +23,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -35,8 +37,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.platform.LocalContext
@@ -45,6 +52,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -462,16 +470,31 @@ fun PlayerScreen(
             }
         }
 
-        if (isBuffering && playbackError == null && !showControls && !isMenuOpen) {
+        if (isBuffering && playbackError == null && !isMenuOpen) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(
-                    color = Color.White,
-                    strokeWidth = 3.dp,
-                    modifier = Modifier.size(36.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(128.dp)
+                        .drawWithCache {
+                            val scrim = Brush.radialGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.72f),
+                                    Color.Black.copy(alpha = 0.36f),
+                                    Color.Transparent
+                                ),
+                                radius = size.minDimension * 0.5f
+                            )
+                            onDrawBehind {
+                                drawCircle(brush = scrim)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    PlayerBufferingSpinner()
+                }
             }
         }
 
@@ -527,6 +550,60 @@ fun PlayerScreen(
                     lastInteraction = System.currentTimeMillis()
                     playPauseFocusRequester.requestFocus()
                 }
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlayerBufferingSpinner(
+    modifier: Modifier = Modifier,
+    size: Dp = 54.dp
+) {
+    val transition = rememberInfiniteTransition(label = "playerBufferingSpinner")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 760, easing = LinearEasing)
+        ),
+        label = "playerBufferingRotation"
+    )
+
+    Canvas(modifier = modifier.size(size)) {
+        val strokeWidth = 2.dp.toPx()
+        val inset = strokeWidth / 2f
+        val arcSize = Size(
+            width = this.size.width - strokeWidth,
+            height = this.size.height - strokeWidth
+        )
+        val stroke = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+        val radius = (minOf(this.size.width, this.size.height) - strokeWidth) / 2f
+
+        drawCircle(
+            color = Color.White.copy(alpha = 0.14f),
+            radius = radius,
+            style = stroke
+        )
+
+        rotate(degrees = rotation) {
+            drawArc(
+                color = Color.White.copy(alpha = 0.42f),
+                startAngle = 0f,
+                sweepAngle = 62f,
+                useCenter = false,
+                topLeft = Offset(inset, inset),
+                size = arcSize,
+                style = stroke
+            )
+            drawArc(
+                color = Color.White.copy(alpha = 0.86f),
+                startAngle = -86f,
+                sweepAngle = 88f,
+                useCenter = false,
+                topLeft = Offset(inset, inset),
+                size = arcSize,
+                style = stroke
             )
         }
     }
