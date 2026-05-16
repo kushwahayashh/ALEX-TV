@@ -150,21 +150,31 @@ fun PlayerScreen(
     val screenFocusRequester = remember { FocusRequester() }
     var resumeOnStart by remember { mutableStateOf(false) }
     var wasPausedAtMs by remember { mutableLongStateOf(-1L) }
+    var actionFeedback by remember { mutableStateOf<PlayerActionFeedback?>(null) }
+    var playWhenReadyState by remember { mutableStateOf(true) }
 
     var pendingResumeSeekMs by remember { mutableLongStateOf(-1L) }
+    val isPlaybackIntended = isPlaying || playWhenReadyState
+
+    fun showActionFeedback(type: PlayerActionFeedbackType) {
+        actionFeedback = PlayerActionFeedback(type)
+    }
 
     fun playerPause() {
+        showActionFeedback(PlayerActionFeedbackType.Pause)
         wasPausedAtMs = exoPlayer.currentPosition
         exoPlayer.pause()
     }
 
     fun playerPlay() {
+        showActionFeedback(PlayerActionFeedbackType.Play)
         if (wasPausedAtMs >= 0L) {
             // Seek to the exact pause position to flush decoder buffers and realign
             // audio+video clocks. Store it so STATE_READY handler can call play()
             // only after the seek completes — this avoids both jitter and desync.
             pendingResumeSeekMs = wasPausedAtMs
             exoPlayer.seekTo(wasPausedAtMs)
+            exoPlayer.playWhenReady = true
             wasPausedAtMs = -1L
         } else {
             exoPlayer.play()
@@ -199,6 +209,10 @@ fun PlayerScreen(
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlayingState: Boolean) {
                 isPlaying = isPlayingState
+            }
+
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                playWhenReadyState = playWhenReady
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -392,7 +406,7 @@ fun PlayerScreen(
                                 showControls = true
                             }
                             if (playbackError == null) {
-                                if (isPlaying) playerPause() else playerPlay()
+                                if (isPlaybackIntended) playerPause() else playerPlay()
                             }
                             true
                         }
@@ -405,6 +419,9 @@ fun PlayerScreen(
                                     val rawDuration = exoPlayer.duration
                                     val safeDuration = if (rawDuration > 0 && rawDuration != C.TIME_UNSET) rawDuration else Long.MAX_VALUE
                                     val next = (exoPlayer.currentPosition + offset).coerceAtLeast(0L).coerceAtMost(safeDuration)
+                                    showActionFeedback(
+                                        if (offset < 0) PlayerActionFeedbackType.Rewind else PlayerActionFeedbackType.Forward
+                                    )
                                     exoPlayer.seekTo(next)
                                 }
                                 true
@@ -498,22 +515,34 @@ fun PlayerScreen(
             }
         }
 
+        PlayerActionFeedbackOverlay(
+            feedback = actionFeedback,
+            onFinished = { finishedId ->
+                if (actionFeedback?.id == finishedId) {
+                    actionFeedback = null
+                }
+            }
+        )
+
         PlayerControlsOverlay(
             exoPlayer = exoPlayer,
             title = title,
-            isPlaying = isPlaying,
+            isPlaying = isPlaybackIntended,
             showControls = showControls,
             isMenuOpen = isMenuOpen,
             onInteraction = { lastInteraction = System.currentTimeMillis() },
             onTogglePlayPause = {
                 lastInteraction = System.currentTimeMillis()
-                if (isPlaying) playerPause() else playerPlay()
+                if (isPlaybackIntended) playerPause() else playerPlay()
             },
             onSeekBy = { offsetMs ->
                 lastInteraction = System.currentTimeMillis()
                 val rawDuration = exoPlayer.duration
                 val safeDuration = if (rawDuration > 0 && rawDuration != C.TIME_UNSET) rawDuration else Long.MAX_VALUE
                 val next = (exoPlayer.currentPosition + offsetMs).coerceAtLeast(0L).coerceAtMost(safeDuration)
+                showActionFeedback(
+                    if (offsetMs < 0) PlayerActionFeedbackType.Rewind else PlayerActionFeedbackType.Forward
+                )
                 exoPlayer.seekTo(next)
             },
             onShowCaptions = {
